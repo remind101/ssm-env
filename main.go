@@ -17,8 +17,6 @@ import (
 // from AWS Parameter Store.
 const Prefix = "ssm://"
 
-var client = ssm.New(session.New())
-
 func main() {
 	var (
 		decrypt = flag.Bool("with-decryption", false, "Will attempt to decrypt the parameter, and set the env var as plaintext")
@@ -29,8 +27,29 @@ func main() {
 	path, err := exec.LookPath(args[0])
 	must(err)
 
-	must(expandEnviron(*decrypt))
+	var os osEnviron
+	e := &expander{ssm: ssm.New(session.New()), os: os}
+	must(e.expandEnviron(*decrypt))
 	must(syscall.Exec(path, args[0:], os.Environ()))
+}
+
+type ssmClient interface {
+	GetParameters(*ssm.GetParametersInput) (*ssm.GetParametersOutput, error)
+}
+
+type environ interface {
+	Environ() []string
+	Setenv(key, vale string)
+}
+
+type osEnviron int
+
+func (e osEnviron) Environ() []string {
+	return os.Environ()
+}
+
+func (e osEnviron) Setenv(key, val string) {
+	os.Setenv(key, val)
 }
 
 type ssmVar struct {
@@ -38,7 +57,12 @@ type ssmVar struct {
 	parameter string
 }
 
-func expandEnviron(decrypt bool) error {
+type expander struct {
+	ssm ssmClient
+	os  environ
+}
+
+func (e *expander) expandEnviron(decrypt bool) error {
 	// Environment variables that point to some SSM parameters.
 	var ssmVars []ssmVar
 
@@ -46,14 +70,19 @@ func expandEnviron(decrypt bool) error {
 		WithDecryption: aws.Bool(decrypt),
 	}
 
-	for _, envvar := range os.Environ() {
+	names := make(map[string]bool)
+	for _, envvar := range e.os.Environ() {
 		k, v := splitVar(envvar)
 		if strings.HasPrefix(v, Prefix) {
 			// The name of the SSM parameter.
 			parameter := v[len(Prefix):]
-			input.Names = append(input.Names, aws.String(parameter))
+			names[parameter] = true
 			ssmVars = append(ssmVars, ssmVar{k, parameter})
 		}
+	}
+
+	for k := range names {
+		input.Names = append(input.Names, aws.String(k))
 	}
 
 	if len(input.Names) == 0 {
@@ -61,17 +90,13 @@ func expandEnviron(decrypt bool) error {
 		return nil
 	}
 
-	resp, err := client.GetParameters(input)
+	resp, err := e.ssm.GetParameters(input)
 	if err != nil {
 		return err
 	}
 
 	if len(resp.InvalidParameters) > 0 {
-		var parameters []string
-		for _, p := range resp.InvalidParameters {
-			parameters = append(parameters, aws.StringValue(p))
-		}
-		return fmt.Errorf("invalid parameters: %v", parameters)
+		return newInvalidParametersError(resp)
 	}
 
 	values := make(map[string]string)
@@ -80,10 +105,30 @@ func expandEnviron(decrypt bool) error {
 	}
 
 	for _, v := range ssmVars {
-		os.Setenv(v.envvar, values[v.parameter])
+		e.os.Setenv(v.envvar, values[v.parameter])
 	}
 
 	return nil
+}
+
+type invalidParametersError struct {
+	InvalidParameters []string
+}
+
+func newInvalidParametersError(resp *ssm.GetParametersOutput) *invalidParametersError {
+	e := new(invalidParametersError)
+	for _, p := range resp.InvalidParameters {
+		if p == nil {
+			continue
+		}
+
+		e.InvalidParameters = append(e.InvalidParameters, *p)
+	}
+	return e
+}
+
+func (e *invalidParametersError) Error() string {
+	return fmt.Sprintf("invalid parameters: %v", e.InvalidParameters)
 }
 
 func splitVar(v string) (key, val string) {
