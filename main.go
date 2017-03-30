@@ -32,6 +32,8 @@ var TemplateFuncs = template.FuncMap{
 	"trim":       strings.Trim,
 	"title":      strings.Title,
 	"toTitle":    strings.ToTitle,
+	"toLower":    strings.ToLower,
+	"toUpper":    strings.ToUpper,
 }
 
 func main() {
@@ -41,6 +43,11 @@ func main() {
 	)
 	flag.Parse()
 	args := flag.Args()
+
+	if len(args) <= 0 {
+		flag.Usage()
+		os.Exit(1)
+	}
 
 	path, err := exec.LookPath(args[0])
 	must(err)

@@ -1,2 +1,2 @@
-bin/ssm-env:
+bin/ssm-env: *.go
 	go build -o $@ .
