@@ -17,16 +17,21 @@ import (
 
 // DefaultTemplate is the default template used to determine what the SSM
 // parameter name is for an environment variable.
-const DefaultTemplate = `{{ withoutPrefix "ssm://" .Value }}`
+const DefaultTemplate = `{{ if hasPrefix .Value "ssm://" }}{{ trimPrefix .Value "ssm://" }}{{ end }}`
 
 // TemplateFuncs are helper functions provided to the template.
 var TemplateFuncs = template.FuncMap{
-	"withoutPrefix": func(prefix, v string) string {
-		if strings.HasPrefix(v, prefix) {
-			return v[len(prefix):]
-		}
-		return ""
-	},
+	"contains":   strings.Contains,
+	"hasPrefix":  strings.HasPrefix,
+	"hasSuffix":  strings.HasSuffix,
+	"trimPrefix": strings.TrimPrefix,
+	"trimSuffix": strings.TrimSuffix,
+	"trimSpace":  strings.TrimSpace,
+	"trimLeft":   strings.TrimLeft,
+	"trimRight":  strings.TrimRight,
+	"trim":       strings.Trim,
+	"title":      strings.Title,
+	"toTitle":    strings.ToTitle,
 }
 
 func main() {
