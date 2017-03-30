@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"sort"
 	"testing"
+	"text/template"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/ssm"
@@ -15,6 +16,7 @@ func TestExpandEnviron_NoSSMParameters(t *testing.T) {
 	os := newFakeEnviron()
 	c := new(mockSSM)
 	e := expander{
+		t:   template.Must(parseTemplate(DefaultTemplate)),
 		os:  os,
 		ssm: c,
 	}
@@ -35,6 +37,40 @@ func TestExpandEnviron_SimpleSSMParameter(t *testing.T) {
 	os := newFakeEnviron()
 	c := new(mockSSM)
 	e := expander{
+		t:   template.Must(parseTemplate(DefaultTemplate)),
+		os:  os,
+		ssm: c,
+	}
+
+	os.Setenv("SUPER_SECRET", "ssm://secret")
+
+	c.On("GetParameters", &ssm.GetParametersInput{
+		Names:          []*string{aws.String("secret")},
+		WithDecryption: aws.Bool(true),
+	}).Return(&ssm.GetParametersOutput{
+		Parameters: []*ssm.Parameter{
+			{Name: aws.String("secret"), Value: aws.String("hehe")},
+		},
+	}, nil)
+
+	decrypt := true
+	err := e.expandEnviron(decrypt)
+	assert.NoError(t, err)
+
+	assert.Equal(t, []string{
+		"SHELL=/bin/bash",
+		"SUPER_SECRET=hehe",
+		"TERM=screen-256color",
+	}, os.Environ())
+
+	c.AssertExpectations(t)
+}
+
+func TestExpandEnviron_CustomTemplate(t *testing.T) {
+	os := newFakeEnviron()
+	c := new(mockSSM)
+	e := expander{
+		t:   template.Must(parseTemplate(`{{ if eq .Name "SUPER_SECRET" }}secret{{end}}`)),
 		os:  os,
 		ssm: c,
 	}
@@ -67,6 +103,7 @@ func TestExpandEnviron_DuplicateSSMParameter(t *testing.T) {
 	os := newFakeEnviron()
 	c := new(mockSSM)
 	e := expander{
+		t:   template.Must(parseTemplate(DefaultTemplate)),
 		os:  os,
 		ssm: c,
 	}
@@ -101,6 +138,7 @@ func TestExpandEnviron_InvalidParameters(t *testing.T) {
 	os := newFakeEnviron()
 	c := new(mockSSM)
 	e := expander{
+		t:   template.Must(parseTemplate(DefaultTemplate)),
 		os:  os,
 		ssm: c,
 	}

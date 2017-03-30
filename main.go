@@ -1,25 +1,38 @@
 package main
 
 import (
+	"bytes"
 	"flag"
 	"fmt"
 	"os"
 	"os/exec"
 	"strings"
 	"syscall"
+	"text/template"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/ssm"
 )
 
-// Prefix is used to determine if an environment variable should be obtained
-// from AWS Parameter Store.
-const Prefix = "ssm://"
+// DefaultTemplate is the default template used to determine what the SSM
+// parameter name is for an environment variable.
+const DefaultTemplate = `{{ withoutPrefix "ssm://" .Value }}`
+
+// TemplateFuncs are helper functions provided to the template.
+var TemplateFuncs = template.FuncMap{
+	"withoutPrefix": func(prefix, v string) string {
+		if strings.HasPrefix(v, prefix) {
+			return v[len(prefix):]
+		}
+		return ""
+	},
+}
 
 func main() {
 	var (
-		decrypt = flag.Bool("with-decryption", false, "Will attempt to decrypt the parameter, and set the env var as plaintext")
+		template = flag.String("template", DefaultTemplate, "The template used to determine what the SSM parameter name is for an environment variable. When this template returns an empty string, the env variable is not an SSM parameter")
+		decrypt  = flag.Bool("with-decryption", false, "Will attempt to decrypt the parameter, and set the env var as plaintext")
 	)
 	flag.Parse()
 	args := flag.Args()
@@ -28,9 +41,16 @@ func main() {
 	must(err)
 
 	var os osEnviron
-	e := &expander{ssm: ssm.New(session.New()), os: os}
+
+	t, err := parseTemplate(*template)
+	must(err)
+	e := &expander{t: t, ssm: ssm.New(session.New()), os: os}
 	must(e.expandEnviron(*decrypt))
 	must(syscall.Exec(path, args[0:], os.Environ()))
+}
+
+func parseTemplate(templateText string) (*template.Template, error) {
+	return template.New("template").Funcs(TemplateFuncs).Parse(templateText)
 }
 
 type ssmClient interface {
@@ -58,8 +78,22 @@ type ssmVar struct {
 }
 
 type expander struct {
+	t   *template.Template
 	ssm ssmClient
 	os  environ
+}
+
+func (e *expander) parameter(k, v string) (*string, error) {
+	b := new(bytes.Buffer)
+	if err := e.t.Execute(b, struct{ Name, Value string }{k, v}); err != nil {
+		return nil, err
+	}
+
+	if p := b.String(); p != "" {
+		return &p, nil
+	}
+
+	return nil, nil
 }
 
 func (e *expander) expandEnviron(decrypt bool) error {
@@ -73,11 +107,15 @@ func (e *expander) expandEnviron(decrypt bool) error {
 	names := make(map[string]bool)
 	for _, envvar := range e.os.Environ() {
 		k, v := splitVar(envvar)
-		if strings.HasPrefix(v, Prefix) {
-			// The name of the SSM parameter.
-			parameter := v[len(Prefix):]
-			names[parameter] = true
-			ssmVars = append(ssmVars, ssmVar{k, parameter})
+
+		parameter, err := e.parameter(k, v)
+		if err != nil {
+			return fmt.Errorf("determining name of parameter: %v", err)
+		}
+
+		if parameter != nil {
+			names[*parameter] = true
+			ssmVars = append(ssmVars, ssmVar{k, *parameter})
 		}
 	}
 
