@@ -40,6 +40,7 @@ func main() {
 	var (
 		template = flag.String("template", DefaultTemplate, "The template used to determine what the SSM parameter name is for an environment variable. When this template returns an empty string, the env variable is not an SSM parameter")
 		decrypt  = flag.Bool("with-decryption", false, "Will attempt to decrypt the parameter, and set the env var as plaintext")
+		verbose  = flag.Bool("verbose", false, "Will log expanded parameters to stderr")
 	)
 	flag.Parse()
 	args := flag.Args()
@@ -57,7 +58,7 @@ func main() {
 	t, err := parseTemplate(*template)
 	must(err)
 	e := &expander{t: t, ssm: ssm.New(session.New()), os: os}
-	must(e.expandEnviron(*decrypt))
+	must(e.expandEnviron(*decrypt, *verbose))
 	must(syscall.Exec(path, args[0:], os.Environ()))
 }
 
@@ -108,7 +109,7 @@ func (e *expander) parameter(k, v string) (*string, error) {
 	return nil, nil
 }
 
-func (e *expander) expandEnviron(decrypt bool) error {
+func (e *expander) expandEnviron(decrypt, verbose bool) error {
 	// Environment variables that point to some SSM parameters.
 	var ssmVars []ssmVar
 
@@ -155,6 +156,9 @@ func (e *expander) expandEnviron(decrypt bool) error {
 	}
 
 	for _, v := range ssmVars {
+		if verbose {
+			fmt.Fprintf(os.Stderr, "ssm-env: expanding %s to the value of %s\n", v.envvar, v.parameter)
+		}
 		e.os.Setenv(v.envvar, values[v.parameter])
 	}
 

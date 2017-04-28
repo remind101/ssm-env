@@ -22,7 +22,8 @@ func TestExpandEnviron_NoSSMParameters(t *testing.T) {
 	}
 
 	decrypt := false
-	err := e.expandEnviron(decrypt)
+	verbose := false
+	err := e.expandEnviron(decrypt, verbose)
 	assert.NoError(t, err)
 
 	assert.Equal(t, []string{
@@ -54,7 +55,8 @@ func TestExpandEnviron_SimpleSSMParameter(t *testing.T) {
 	}, nil)
 
 	decrypt := true
-	err := e.expandEnviron(decrypt)
+	verbose := false
+	err := e.expandEnviron(decrypt, verbose)
 	assert.NoError(t, err)
 
 	assert.Equal(t, []string{
@@ -87,7 +89,8 @@ func TestExpandEnviron_CustomTemplate(t *testing.T) {
 	}, nil)
 
 	decrypt := true
-	err := e.expandEnviron(decrypt)
+	verbose := false
+	err := e.expandEnviron(decrypt, verbose)
 	assert.NoError(t, err)
 
 	assert.Equal(t, []string{
@@ -121,7 +124,8 @@ func TestExpandEnviron_DuplicateSSMParameter(t *testing.T) {
 	}, nil)
 
 	decrypt := false
-	err := e.expandEnviron(decrypt)
+	verbose := false
+	err := e.expandEnviron(decrypt, verbose)
 	assert.NoError(t, err)
 
 	assert.Equal(t, []string{
@@ -153,7 +157,8 @@ func TestExpandEnviron_InvalidParameters(t *testing.T) {
 	}, nil)
 
 	decrypt := false
-	err := e.expandEnviron(decrypt)
+	verbose := false
+	err := e.expandEnviron(decrypt, verbose)
 	assert.Equal(t, &invalidParametersError{InvalidParameters: []string{"secret"}}, err)
 
 	c.AssertExpectations(t)
