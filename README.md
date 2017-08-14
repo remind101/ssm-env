@@ -1,4 +1,16 @@
-`ssm-env` is a simple UNIX tool to populate env vars from AWS Parameter Store. Given the following environment:
+# ssm-env
+
+`ssm-env` is a simple UNIX tool to populate env vars from AWS Parameter Store.
+
+## Usage
+
+```console
+ssm-env [-template STRING] [-with-decryption] COMMAND
+```
+
+## Details
+
+Given the following environment:
 
 ```
 RAILS_ENV=production
@@ -20,4 +32,12 @@ $ export COOKIE_SECRET=xxx
 $ ssm-env -template '{{ if eq .Name "COOKIE_SECRET" }}prod.app.cookie-secret{{end}}' env
 RAILS_ENV=production
 COOKIE_SECRET=super-secret
+```
+
+## Installation
+
+```console
+$ git clone https://github.com/remind101/ssm-env && cd ssm-env
+$ mv vendor/ src/ && GOPATH=$CWD make
+$ echo "PATH=$CWD/bin:$PATH" >> ~/.bashrc
 ```
