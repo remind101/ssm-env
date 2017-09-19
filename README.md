@@ -37,7 +37,19 @@ COOKIE_SECRET=super-secret
 ## Installation
 
 ```console
-$ git clone https://github.com/remind101/ssm-env && cd ssm-env
-$ mv vendor/ src/ && GOPATH=$CWD make
-$ echo "PATH=$CWD/bin:$PATH" >> ~/.bashrc
+$ go get -u https://github.com/remind101/ssm-env
 ```
+
+### Usage with Docker
+
+A common use case is to use `ssm-env` as a Docker ENTRYPOINT. You can copy and paste the following into the top of a Dockerfile:
+
+```dockerfile
+RUN curl -L https://github.com/remind101/ssm-env/releases/download/v0.0.2/ssm-env > /usr/local/bin/ssm-env && \
+      cd /usr/local/bin && \
+      echo ad0f184da3a6536d0614ce4133ceb23b  ssm-env | md5sum -c && \
+      chmod +x ssm-env
+ENTRYPOINT ["/usr/local/bin/ssm-env", "-with-decryption"]
+```
+
+Now, any command executed with the Docker image will be funneled through ssm-env.
