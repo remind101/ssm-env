@@ -16,9 +16,10 @@ func TestExpandEnviron_NoSSMParameters(t *testing.T) {
 	os := newFakeEnviron()
 	c := new(mockSSM)
 	e := expander{
-		t:   template.Must(parseTemplate(DefaultTemplate)),
-		os:  os,
-		ssm: c,
+		t:         template.Must(parseTemplate(DefaultTemplate)),
+		os:        os,
+		ssm:       c,
+		batchSize: defaultBatchSize,
 	}
 
 	decrypt := false
@@ -37,9 +38,10 @@ func TestExpandEnviron_SimpleSSMParameter(t *testing.T) {
 	os := newFakeEnviron()
 	c := new(mockSSM)
 	e := expander{
-		t:   template.Must(parseTemplate(DefaultTemplate)),
-		os:  os,
-		ssm: c,
+		t:         template.Must(parseTemplate(DefaultTemplate)),
+		os:        os,
+		ssm:       c,
+		batchSize: defaultBatchSize,
 	}
 
 	os.Setenv("SUPER_SECRET", "ssm://secret")
@@ -70,9 +72,10 @@ func TestExpandEnviron_CustomTemplate(t *testing.T) {
 	os := newFakeEnviron()
 	c := new(mockSSM)
 	e := expander{
-		t:   template.Must(parseTemplate(`{{ if eq .Name "SUPER_SECRET" }}secret{{end}}`)),
-		os:  os,
-		ssm: c,
+		t:         template.Must(parseTemplate(`{{ if eq .Name "SUPER_SECRET" }}secret{{end}}`)),
+		os:        os,
+		ssm:       c,
+		batchSize: defaultBatchSize,
 	}
 
 	os.Setenv("SUPER_SECRET", "ssm://secret")
@@ -103,9 +106,10 @@ func TestExpandEnviron_DuplicateSSMParameter(t *testing.T) {
 	os := newFakeEnviron()
 	c := new(mockSSM)
 	e := expander{
-		t:   template.Must(parseTemplate(DefaultTemplate)),
-		os:  os,
-		ssm: c,
+		t:         template.Must(parseTemplate(DefaultTemplate)),
+		os:        os,
+		ssm:       c,
+		batchSize: defaultBatchSize,
 	}
 
 	os.Setenv("SUPER_SECRET_A", "ssm://secret")
@@ -138,9 +142,10 @@ func TestExpandEnviron_InvalidParameters(t *testing.T) {
 	os := newFakeEnviron()
 	c := new(mockSSM)
 	e := expander{
-		t:   template.Must(parseTemplate(DefaultTemplate)),
-		os:  os,
-		ssm: c,
+		t:         template.Must(parseTemplate(DefaultTemplate)),
+		os:        os,
+		ssm:       c,
+		batchSize: defaultBatchSize,
 	}
 
 	os.Setenv("SUPER_SECRET", "ssm://secret")
@@ -155,6 +160,51 @@ func TestExpandEnviron_InvalidParameters(t *testing.T) {
 	decrypt := false
 	err := e.expandEnviron(decrypt)
 	assert.Equal(t, &invalidParametersError{InvalidParameters: []string{"secret"}}, err)
+
+	c.AssertExpectations(t)
+}
+
+func TestExpandEnviron_BatchParameters(t *testing.T) {
+	os := newFakeEnviron()
+	c := new(mockSSM)
+	e := expander{
+		t:         template.Must(parseTemplate(DefaultTemplate)),
+		os:        os,
+		ssm:       c,
+		batchSize: 1,
+	}
+
+	os.Setenv("SUPER_SECRET_A", "ssm://secret-a")
+	os.Setenv("SUPER_SECRET_B", "ssm://secret-b")
+
+	c.On("GetParameters", &ssm.GetParametersInput{
+		Names:          []*string{aws.String("secret-a")},
+		WithDecryption: aws.Bool(false),
+	}).Return(&ssm.GetParametersOutput{
+		Parameters: []*ssm.Parameter{
+			{Name: aws.String("secret-a"), Value: aws.String("val-a")},
+		},
+	}, nil)
+
+	c.On("GetParameters", &ssm.GetParametersInput{
+		Names:          []*string{aws.String("secret-b")},
+		WithDecryption: aws.Bool(false),
+	}).Return(&ssm.GetParametersOutput{
+		Parameters: []*ssm.Parameter{
+			{Name: aws.String("secret-b"), Value: aws.String("val-b")},
+		},
+	}, nil)
+
+	decrypt := false
+	err := e.expandEnviron(decrypt)
+	assert.NoError(t, err)
+
+	assert.Equal(t, []string{
+		"SHELL=/bin/bash",
+		"SUPER_SECRET_A=val-a",
+		"SUPER_SECRET_B=val-b",
+		"TERM=screen-256color",
+	}, os.Environ())
 
 	c.AssertExpectations(t)
 }
