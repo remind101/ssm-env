@@ -1,0 +1,7 @@
+builds:
+  - binary: ssm-env
+    goos:
+      - linux
+    goarch:
+      - amd64
+      - 386
