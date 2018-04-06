@@ -37,8 +37,10 @@ COOKIE_SECRET=super-secret
 ## Installation
 
 ```console
-$ go get -u https://github.com/remind101/ssm-env
+$ go get -u github.com/remind101/ssm-env
 ```
+
+You can most likely find the downloaded binary in `~/go/bin/ssm-env`
 
 ### Usage with Docker
 
