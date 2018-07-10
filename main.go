@@ -62,10 +62,14 @@ func main() {
 
 	t, err := parseTemplate(*template)
 	must(err)
+	s, err := session.NewSessionWithOptions(session.Options{
+		SharedConfigState: session.SharedConfigEnable,
+	})
+	must(err)
 	e := &expander{
 		batchSize: defaultBatchSize,
 		t:         t,
-		ssm:       ssm.New(session.New()),
+		ssm:       ssm.New(s),
 		os:        os,
 	}
 	must(e.expandEnviron(*decrypt))
