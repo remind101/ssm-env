@@ -65,8 +65,10 @@ func main() {
 	e := &expander{
 		batchSize: defaultBatchSize,
 		t:         t,
-		ssm:       ssm.New(session.New()),
-		os:        os,
+		ssm: func() ssmClient {
+			return ssm.New(session.Must(session.NewSession()))
+		},
+		os: os,
 	}
 	must(e.expandEnviron(*decrypt))
 	must(syscall.Exec(path, args[0:], os.Environ()))
@@ -102,7 +104,7 @@ type ssmVar struct {
 
 type expander struct {
 	t         *template.Template
-	ssm       ssmClient
+	ssm       func() ssmClient
 	os        environ
 	batchSize int
 }
@@ -184,7 +186,7 @@ func (e *expander) getParameters(names []string, decrypt bool) (map[string]strin
 		input.Names = append(input.Names, aws.String(n))
 	}
 
-	resp, err := e.ssm.GetParameters(input)
+	resp, err := e.ssm().GetParameters(input)
 	if err != nil {
 		return values, err
 	}

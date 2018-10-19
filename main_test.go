@@ -16,9 +16,11 @@ func TestExpandEnviron_NoSSMParameters(t *testing.T) {
 	os := newFakeEnviron()
 	c := new(mockSSM)
 	e := expander{
-		t:         template.Must(parseTemplate(DefaultTemplate)),
-		os:        os,
-		ssm:       c,
+		t:  template.Must(parseTemplate(DefaultTemplate)),
+		os: os,
+		ssm: func() ssmClient {
+			return c
+		},
 		batchSize: defaultBatchSize,
 	}
 
@@ -38,9 +40,11 @@ func TestExpandEnviron_SimpleSSMParameter(t *testing.T) {
 	os := newFakeEnviron()
 	c := new(mockSSM)
 	e := expander{
-		t:         template.Must(parseTemplate(DefaultTemplate)),
-		os:        os,
-		ssm:       c,
+		t:  template.Must(parseTemplate(DefaultTemplate)),
+		os: os,
+		ssm: func() ssmClient {
+			return c
+		},
 		batchSize: defaultBatchSize,
 	}
 
@@ -72,9 +76,11 @@ func TestExpandEnviron_CustomTemplate(t *testing.T) {
 	os := newFakeEnviron()
 	c := new(mockSSM)
 	e := expander{
-		t:         template.Must(parseTemplate(`{{ if eq .Name "SUPER_SECRET" }}secret{{end}}`)),
-		os:        os,
-		ssm:       c,
+		t:  template.Must(parseTemplate(`{{ if eq .Name "SUPER_SECRET" }}secret{{end}}`)),
+		os: os,
+		ssm: func() ssmClient {
+			return c
+		},
 		batchSize: defaultBatchSize,
 	}
 
@@ -106,9 +112,11 @@ func TestExpandEnviron_DuplicateSSMParameter(t *testing.T) {
 	os := newFakeEnviron()
 	c := new(mockSSM)
 	e := expander{
-		t:         template.Must(parseTemplate(DefaultTemplate)),
-		os:        os,
-		ssm:       c,
+		t:  template.Must(parseTemplate(DefaultTemplate)),
+		os: os,
+		ssm: func() ssmClient {
+			return c
+		},
 		batchSize: defaultBatchSize,
 	}
 
@@ -142,9 +150,11 @@ func TestExpandEnviron_InvalidParameters(t *testing.T) {
 	os := newFakeEnviron()
 	c := new(mockSSM)
 	e := expander{
-		t:         template.Must(parseTemplate(DefaultTemplate)),
-		os:        os,
-		ssm:       c,
+		t:  template.Must(parseTemplate(DefaultTemplate)),
+		os: os,
+		ssm: func() ssmClient {
+			return c
+		},
 		batchSize: defaultBatchSize,
 	}
 
@@ -168,9 +178,11 @@ func TestExpandEnviron_BatchParameters(t *testing.T) {
 	os := newFakeEnviron()
 	c := new(mockSSM)
 	e := expander{
-		t:         template.Must(parseTemplate(DefaultTemplate)),
-		os:        os,
-		ssm:       c,
+		t:  template.Must(parseTemplate(DefaultTemplate)),
+		os: os,
+		ssm: func() ssmClient {
+			return c
+		},
 		batchSize: 1,
 	}
 
