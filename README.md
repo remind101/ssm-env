@@ -85,3 +85,38 @@ ENTRYPOINT ["/usr/local/bin/ssm-env", "-with-decryption", "/usr/local/bin/dumb-i
 CMD ["node", "server.js"]
 EXPOSE 3000
 ```
+
+## Usage with Kubernetes
+
+A simple way to provide AWS credentials to `ssm-env` in containers run in Kubernetes is to use Kubernetes
+[Secrets](https://kubernetes.io/docs/tasks/inject-data-application/distribute-credentials-secure/) and to expose
+them as environment variables. There are more secure alternatives to environment variables, but if this is secure
+enough for your needs, it provides a low-effort setup path.
+
+First, store your AWS credentials in a secret called `aws-credentials`:
+
+```shell
+kubectl create secret generic aws-credentials --from-literal=AWS_ACCESS_KEY_ID='AKIA...' --from-literal=AWS_SECRET_ACCESS_KEY='...'
+```
+
+Then, in the container specification in your deployment or pod file, add them as environment variables (alongside
+all other environment variables, including those retrieved from SSM):
+
+```yaml
+      containers:
+        - env:
+            - name: AWS_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef:
+                  name: aws-credentials
+                  key: AWS_ACCESS_KEY_ID
+            - name: AWS_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: aws-credentials
+                  key: AWS_SECRET_ACCESS_KEY
+            - name: AWS_REGION
+              value: us-east-1
+            - name: SSM_EXAMPLE
+              value: ssm:///foo/bar
+```
