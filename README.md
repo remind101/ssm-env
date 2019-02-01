@@ -56,34 +56,25 @@ ENTRYPOINT ["/usr/local/bin/ssm-env", "-with-decryption"]
 
 Now, any command executed with the Docker image will be funneled through ssm-env.
 
-### Usage with Alpine Node Docker Images
+#### Alpine Docker Image
 
-To use `ssm-env` with [Alpine Node](https://github.com/mhart/alpine-node) or other
-[Alpine Linux](https://alpinelinux.org/) Docker images, root certificates need to be added and the installation
-command differs, as shown in the `Dockerfile` below. Note that this example `Dockerfile` for Alpine Node also
-includes [dumb-init](https://github.com/Yelp/dumb-init) which is recommended when running Node in containers.
+To use `ssm-env` with [Alpine](https://hub.docker.com/_/alpine) Docker images, root certificates need to be added
+and the installation command differs, as shown in the `Dockerfile` below:
 
 ```dockerfile
-FROM node:11-alpine
+FROM alpine:latest
 
-# ...copy code, npm install etc.
-
-# dumb-init: See https://github.com/Yelp/dumb-init
-RUN wget -O /usr/local/bin/dumb-init https://github.com/Yelp/dumb-init/releases/download/v1.2.2/dumb-init_1.2.2_amd64
-RUN chmod +x /usr/local/bin/dumb-init
+# ...copy code
 
 # ssm-env: See https://github.com/remind101/ssm-env
 RUN wget -O /usr/local/bin/ssm-env https://github.com/remind101/ssm-env/releases/download/v0.0.2/ssm-env
 RUN chmod +x /usr/local/bin/ssm-env
 
-# Alpine Node doesn't include root certificates which ssm-env needs to talk to AWS.
+# Alpine Linux doesn't include root certificates which ssm-env needs to talk to AWS.
 # See https://simplydistributed.wordpress.com/2018/05/22/certificate-error-with-go-http-client-in-alpine-docker/
 RUN apk add --no-cache ca-certificates
 
-USER node
-ENTRYPOINT ["/usr/local/bin/ssm-env", "-with-decryption", "/usr/local/bin/dumb-init", "--"]
-CMD ["node", "server.js"]
-EXPOSE 3000
+ENTRYPOINT ["/usr/local/bin/ssm-env", "-with-decryption"]
 ```
 
 ## Usage with Kubernetes
