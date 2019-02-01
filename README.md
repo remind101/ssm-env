@@ -2,6 +2,14 @@
 
 `ssm-env` is a simple UNIX tool to populate env vars from AWS Parameter Store.
 
+## Installation
+
+```console
+$ go get -u github.com/remind101/ssm-env
+```
+
+You can most likely find the downloaded binary in `~/go/bin/ssm-env`
+
 ## Usage
 
 ```console
@@ -34,15 +42,7 @@ RAILS_ENV=production
 COOKIE_SECRET=super-secret
 ```
 
-## Installation
-
-```console
-$ go get -u github.com/remind101/ssm-env
-```
-
-You can most likely find the downloaded binary in `~/go/bin/ssm-env`
-
-### Usage with Docker
+## Usage with Docker
 
 A common use case is to use `ssm-env` as a Docker ENTRYPOINT. You can copy and paste the following into the top of a Dockerfile:
 
@@ -56,7 +56,7 @@ ENTRYPOINT ["/usr/local/bin/ssm-env", "-with-decryption"]
 
 Now, any command executed with the Docker image will be funneled through ssm-env.
 
-#### Alpine Docker Image
+### Alpine Docker Image
 
 To use `ssm-env` with [Alpine](https://hub.docker.com/_/alpine) Docker images, root certificates need to be added
 and the installation command differs, as shown in the `Dockerfile` below:
