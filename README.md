@@ -49,7 +49,7 @@ A common use case is to use `ssm-env` as a Docker ENTRYPOINT. You can copy and p
 ```dockerfile
 RUN curl -L https://github.com/remind101/ssm-env/releases/download/v0.0.3/ssm-env > /usr/local/bin/ssm-env && \
       cd /usr/local/bin && \
-      echo ad0f184da3a6536d0614ce4133ceb23b  ssm-env | md5sum -c && \
+      echo da4bac1c1937da4689e49b01f1c85e28 ssm-env | md5sum -c && \
       chmod +x ssm-env
 ENTRYPOINT ["/usr/local/bin/ssm-env", "-with-decryption"]
 ```
