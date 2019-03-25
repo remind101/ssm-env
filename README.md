@@ -13,7 +13,7 @@ You can most likely find the downloaded binary in `~/go/bin/ssm-env`
 ## Usage
 
 ```console
-ssm-env [-template STRING] [-with-decryption] COMMAND
+ssm-env [-template STRING] [-with-decryption] [-no-fail] COMMAND
 ```
 
 ## Details
