@@ -23,7 +23,8 @@ func TestExpandEnviron_NoSSMParameters(t *testing.T) {
 	}
 
 	decrypt := false
-	err := e.expandEnviron(decrypt)
+	nofail := false
+	err := e.expandEnviron(decrypt, nofail)
 	assert.NoError(t, err)
 
 	assert.Equal(t, []string{
@@ -56,7 +57,8 @@ func TestExpandEnviron_SimpleSSMParameter(t *testing.T) {
 	}, nil)
 
 	decrypt := true
-	err := e.expandEnviron(decrypt)
+	nofail := false
+	err := e.expandEnviron(decrypt, nofail)
 	assert.NoError(t, err)
 
 	assert.Equal(t, []string{
@@ -90,7 +92,8 @@ func TestExpandEnviron_CustomTemplate(t *testing.T) {
 	}, nil)
 
 	decrypt := true
-	err := e.expandEnviron(decrypt)
+	nofail := false
+	err := e.expandEnviron(decrypt, nofail)
 	assert.NoError(t, err)
 
 	assert.Equal(t, []string{
@@ -125,7 +128,8 @@ func TestExpandEnviron_DuplicateSSMParameter(t *testing.T) {
 	}, nil)
 
 	decrypt := false
-	err := e.expandEnviron(decrypt)
+	nofail := false
+	err := e.expandEnviron(decrypt, nofail)
 	assert.NoError(t, err)
 
 	assert.Equal(t, []string{
@@ -158,8 +162,42 @@ func TestExpandEnviron_InvalidParameters(t *testing.T) {
 	}, nil)
 
 	decrypt := false
-	err := e.expandEnviron(decrypt)
+	nofail := false
+	err := e.expandEnviron(decrypt, nofail)
 	assert.Equal(t, &invalidParametersError{InvalidParameters: []string{"secret"}}, err)
+
+	c.AssertExpectations(t)
+}
+
+func TestExpandEnviron_InvalidParametersNoFail(t *testing.T) {
+	os := newFakeEnviron()
+	c := new(mockSSM)
+	e := expander{
+		t:         template.Must(parseTemplate(DefaultTemplate)),
+		os:        os,
+		ssm:       c,
+		batchSize: defaultBatchSize,
+	}
+
+	os.Setenv("SUPER_SECRET", "ssm://secret")
+
+	c.On("GetParameters", &ssm.GetParametersInput{
+		Names:          []*string{aws.String("secret")},
+		WithDecryption: aws.Bool(false),
+	}).Return(&ssm.GetParametersOutput{
+		InvalidParameters: []*string{aws.String("secret")},
+	}, nil)
+
+	decrypt := false
+	nofail := true
+	err := e.expandEnviron(decrypt, nofail)
+
+  assert.NoError(t, err)
+	assert.Equal(t, []string{
+		"SHELL=/bin/bash",
+		"SUPER_SECRET=ssm://secret",
+		"TERM=screen-256color",
+	}, os.Environ())
 
 	c.AssertExpectations(t)
 }
@@ -196,7 +234,8 @@ func TestExpandEnviron_BatchParameters(t *testing.T) {
 	}, nil)
 
 	decrypt := false
-	err := e.expandEnviron(decrypt)
+	nofail := false
+	err := e.expandEnviron(decrypt, nofail)
 	assert.NoError(t, err)
 
 	assert.Equal(t, []string{
