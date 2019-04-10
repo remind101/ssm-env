@@ -11,6 +11,7 @@ import (
 	"text/template"
 
 	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/ec2metadata"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/ssm"
 )
@@ -66,11 +67,26 @@ func main() {
 	e := &expander{
 		batchSize: defaultBatchSize,
 		t:         t,
-		ssm:       ssm.New(session.New()),
+		ssm:       ssm.New(session.Must(awsSession())),
 		os:        os,
 	}
 	must(e.expandEnviron(*decrypt, *nofail))
 	must(syscall.Exec(path, args[0:], os.Environ()))
+}
+
+func awsSession() (*session.Session, error) {
+	sess := session.Must(session.NewSession())
+	if len(aws.StringValue(sess.Config.Region)) == 0 {
+		meta := ec2metadata.New(sess)
+		identity, err := meta.GetInstanceIdentityDocument()
+		if err != nil {
+			return nil, err
+		}
+		return session.NewSession(&aws.Config{
+			Region: aws.String(identity.Region),
+		})
+	}
+	return sess, nil
 }
 
 func parseTemplate(templateText string) (*template.Template, error) {
