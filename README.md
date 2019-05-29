@@ -47,9 +47,9 @@ COOKIE_SECRET=super-secret
 A common use case is to use `ssm-env` as a Docker ENTRYPOINT. You can copy and paste the following into the top of a Dockerfile:
 
 ```dockerfile
-RUN curl -L https://github.com/remind101/ssm-env/releases/download/v0.0.3/ssm-env > /usr/local/bin/ssm-env && \
+RUN curl -L https://github.com/remind101/ssm-env/releases/download/v0.0.4/ssm-env > /usr/local/bin/ssm-env && \
       cd /usr/local/bin && \
-      echo da4bac1c1937da4689e49b01f1c85e28 ssm-env | md5sum -c && \
+      echo 4a5140b04f8b3f84d16a93540daa7bbd ssm-env | md5sum -c && \
       chmod +x ssm-env
 ENTRYPOINT ["/usr/local/bin/ssm-env", "-with-decryption"]
 ```
