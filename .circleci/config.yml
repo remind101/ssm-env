@@ -1,0 +1,38 @@
+version: 2
+
+defaults: &defaults
+  working_directory: /go/src/github.com/remind101/ssm-env
+  docker:
+    - image: circleci/golang:1.11.6
+  environment:
+    GO111MODULE: "on"
+
+workflows:
+  version: 2
+  build-and-test:
+    jobs:
+      - test
+      - build
+
+jobs:
+
+  test:
+    << : *defaults
+    steps:
+      - checkout:
+          path: /go/src/github.com/remind101/ssm-env
+      - run:
+          command: make test
+          working_directory: /go/src/github.com/remind101/ssm-env
+
+  build:
+    << : *defaults
+    steps:
+      - checkout:
+          path: /go/src/github.com/remind101/ssm-env
+      - run:
+          command: make bin/ssm-env
+          working_directory: /go/src/github.com/remind101/ssm-env
+      - store_artifacts:
+          path: /go/src/github.com/remind101/ssm-env/bin/ssm-env
+          destination: ssm-env
