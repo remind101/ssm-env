@@ -183,7 +183,7 @@ func (e *expander) expandEnviron(decrypt bool, nofail bool) error {
 			val, ok := values[v.parameter]
 			if ok {
 				e.os.Setenv(v.envvar, val)
-			} else {
+			} else if (nofail) {
 				e.os.Setenv(v.envvar, "")
 			}
 		}
