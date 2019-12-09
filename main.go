@@ -175,7 +175,7 @@ func (e *expander) expandEnviron(decrypt bool, nofail bool) error {
 		}
 
 		values, err := e.getParameters(names[i:j], decrypt, nofail)
-		if err != nil {
+		if err != nil && ! nofail {
 			return err
 		}
 
@@ -183,6 +183,8 @@ func (e *expander) expandEnviron(decrypt bool, nofail bool) error {
 			val, ok := values[v.parameter]
 			if ok {
 				e.os.Setenv(v.envvar, val)
+			} else {
+				e.os.Setenv(v.envvar, "")
 			}
 		}
 	}
