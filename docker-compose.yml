@@ -1,0 +1,21 @@
+version: '3.6'
+services:
+  build:
+    build: &build
+      context: .
+      args:
+        CGO_ENABLED: 0
+    volumes:
+      - .:/output
+    working_dir: /go/src/github.com/remind101/ssm-env
+    environment:
+      - APP_NAME
+      - JENKINS_GITHUB_USERNAME
+      - JENKINS_GITHUB_API_TOKEN
+
+  test:
+    build:
+      <<: *build
+      args:
+        CGO_ENABLED: 1
+    command: make test

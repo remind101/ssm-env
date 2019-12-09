@@ -175,7 +175,7 @@ func (e *expander) expandEnviron(decrypt bool, nofail bool) error {
 		}
 
 		values, err := e.getParameters(names[i:j], decrypt, nofail)
-		if err != nil {
+		if err != nil && ! nofail {
 			return err
 		}
 
@@ -215,6 +215,12 @@ func (e *expander) getParameters(names []string, decrypt bool, nofail bool) (map
 
 	for _, p := range resp.Parameters {
 		values[*p.Name] = *p.Value
+	}
+
+	for _, n := range names {
+		if _, ok := values[n]; ! ok {
+			values[n] = ""
+		}
 	}
 
 	return values, nil

@@ -195,7 +195,7 @@ func TestExpandEnviron_InvalidParametersNoFail(t *testing.T) {
   assert.NoError(t, err)
 	assert.Equal(t, []string{
 		"SHELL=/bin/bash",
-		"SUPER_SECRET=ssm://secret",
+		"SUPER_SECRET=",
 		"TERM=screen-256color",
 	}, os.Environ())
 
