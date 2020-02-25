@@ -214,7 +214,13 @@ func (e *expander) getParameters(names []string, decrypt bool, nofail bool) (map
 	}
 
 	for _, p := range resp.Parameters {
-		values[*p.Name] = *p.Value
+		var name string
+		if p.Selector != nil {
+			name = *p.Name + *p.Selector
+		} else {
+			name = *p.Name
+		}
+		values[name] = *p.Value
 	}
 
 	return values, nil
