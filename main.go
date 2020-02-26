@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"flag"
 	"fmt"
+	"github.com/aws/aws-sdk-go/aws/awserr"
 	"os"
 	"os/exec"
 	"strings"
@@ -80,6 +81,10 @@ func awsSession() (*session.Session, error) {
 		meta := ec2metadata.New(sess)
 		identity, err := meta.GetInstanceIdentityDocument()
 		if err != nil {
+			awsErr := err.(awserr.Error)
+			if awsErr.Code() == "EC2MetadataRequestError" {
+				return sess, nil
+			}
 			return nil, err
 		}
 		return session.NewSession(&aws.Config{
