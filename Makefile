@@ -1,3 +1,4 @@
+export GOFLAGS = -mod=readonly
 .PHONY: test
 
 bin/ssm-env: *.go
