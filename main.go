@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"flag"
 	"fmt"
+	"github.com/aws/aws-sdk-go/aws/awserr"
 	"os"
 	"os/exec"
 	"strings"
@@ -80,6 +81,10 @@ func awsSession() (*session.Session, error) {
 		meta := ec2metadata.New(sess)
 		identity, err := meta.GetInstanceIdentityDocument()
 		if err != nil {
+			awsErr := err.(awserr.Error)
+			if awsErr.Code() == "EC2MetadataRequestError" {
+				return sess, nil
+			}
 			return nil, err
 		}
 		return session.NewSession(&aws.Config{
@@ -214,7 +219,13 @@ func (e *expander) getParameters(names []string, decrypt bool, nofail bool) (map
 	}
 
 	for _, p := range resp.Parameters {
-		values[*p.Name] = *p.Value
+		var name string
+		if p.Selector != nil {
+			name = *p.Name + *p.Selector
+		} else {
+			name = *p.Name
+		}
+		values[name] = *p.Value
 	}
 
 	for _, n := range names {

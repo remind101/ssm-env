@@ -42,6 +42,17 @@ RAILS_ENV=production
 COOKIE_SECRET=super-secret
 ```
 
+`ssm-env` also supports [versioned SSM](https://docs.aws.amazon.com/systems-manager/latest/userguide/sysman-paramstore-versions.html) params:
+
+```console
+$ export OLD_SECRET=ssm://secret:1
+$ export NEW_SECRET=ssm://secret:2
+$ ssm-env env
+
+OLD_SECRET=super_secret_v1
+NEW_SECRET=super_secret_v2
+```
+
 ## Usage with Docker
 
 A common use case is to use `ssm-env` as a Docker ENTRYPOINT. You can copy and paste the following into the top of a Dockerfile:

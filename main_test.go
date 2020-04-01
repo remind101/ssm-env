@@ -70,6 +70,41 @@ func TestExpandEnviron_SimpleSSMParameter(t *testing.T) {
 	c.AssertExpectations(t)
 }
 
+func TestExpandEnviron_VersionedSSMParameter(t *testing.T) {
+	os := newFakeEnviron()
+	c := new(mockSSM)
+	e := expander{
+		t:         template.Must(parseTemplate(DefaultTemplate)),
+		os:        os,
+		ssm:       c,
+		batchSize: defaultBatchSize,
+	}
+
+	os.Setenv("SUPER_SECRET", "ssm://secret:1")
+
+	c.On("GetParameters", &ssm.GetParametersInput{
+		Names:          []*string{aws.String("secret:1")},
+		WithDecryption: aws.Bool(true),
+	}).Return(&ssm.GetParametersOutput{
+		Parameters: []*ssm.Parameter{
+			{Name: aws.String("secret"), Value: aws.String("versioned"), Selector: aws.String(":1")},
+		},
+	}, nil)
+
+	decrypt := true
+	nofail := false
+	err := e.expandEnviron(decrypt, nofail)
+	assert.NoError(t, err)
+
+	assert.Equal(t, []string{
+		"SHELL=/bin/bash",
+		"SUPER_SECRET=versioned",
+		"TERM=screen-256color",
+	}, os.Environ())
+
+	c.AssertExpectations(t)
+}
+
 func TestExpandEnviron_CustomTemplate(t *testing.T) {
 	os := newFakeEnviron()
 	c := new(mockSSM)
