@@ -10,11 +10,13 @@ import (
 	"strings"
 	"syscall"
 	"text/template"
+	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/ec2metadata"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/ssm"
+
 )
 
 const (
@@ -49,6 +51,7 @@ func main() {
 		template = flag.String("template", DefaultTemplate, "The template used to determine what the SSM parameter name is for an environment variable. When this template returns an empty string, the env variable is not an SSM parameter")
 		decrypt  = flag.Bool("with-decryption", false, "Will attempt to decrypt the parameter, and set the env var as plaintext")
 		nofail  = flag.Bool("no-fail", false, "Don't fail if error retrieving parameter")
+		credretry = flag.Bool("credential-retry", false, "Will retry indefinitely if NoCredentialProviders occurs")
 	)
 	flag.Parse()
 	args := flag.Args()
@@ -61,18 +64,19 @@ func main() {
 	path, err := exec.LookPath(args[0])
 	must(err)
 
-	var os osEnviron
+	var osEnv osEnviron
 
 	t, err := parseTemplate(*template)
 	must(err)
+
 	e := &expander{
 		batchSize: defaultBatchSize,
 		t:         t,
 		ssm:       ssm.New(session.Must(awsSession())),
-		os:        os,
+		os:        osEnv,
 	}
-	must(e.expandEnviron(*decrypt, *nofail))
-	must(syscall.Exec(path, args[0:], os.Environ()))
+	must(e.expandEnviron(*decrypt, *nofail, *credretry))
+	must(syscall.Exec(path, args[0:], osEnv.Environ()))
 }
 
 func awsSession() (*session.Session, error) {
@@ -142,7 +146,7 @@ func (e *expander) parameter(k, v string) (*string, error) {
 	return nil, nil
 }
 
-func (e *expander) expandEnviron(decrypt bool, nofail bool) error {
+func (e *expander) expandEnviron(decrypt bool, nofail bool, credretry bool) error {
 	// Environment variables that point to some SSM parameters.
 	var ssmVars []ssmVar
 
@@ -179,9 +183,23 @@ func (e *expander) expandEnviron(decrypt bool, nofail bool) error {
 			j = len(names)
 		}
 
-		values, err := e.getParameters(names[i:j], decrypt, nofail)
-		if err != nil && ! nofail {
-			return err
+    var values map[string]string
+		for {
+			var err error
+			values, err = e.getParameters(names[i:j], decrypt, nofail)
+			if err != nil {
+				awsErr := err.(awserr.Error)
+				if awsErr.Code() == "NoCredentialProviders" && credretry {
+					fmt.Fprintf(os.Stderr, "Encountered NoCredentialProviders. Retrying...\n")
+					time.Sleep(time.Duration(2) * time.Second)
+					continue
+				} else {
+					if ! nofail {
+						return err
+					}
+				}
+			}
+			break
 		}
 
 		for _, v := range ssmVars {
