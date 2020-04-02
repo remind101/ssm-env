@@ -24,7 +24,8 @@ func TestExpandEnviron_NoSSMParameters(t *testing.T) {
 
 	decrypt := false
 	nofail := false
-	err := e.expandEnviron(decrypt, nofail)
+	credretry := false
+	err := e.expandEnviron(decrypt, nofail, credretry)
 	assert.NoError(t, err)
 
 	assert.Equal(t, []string{
@@ -58,7 +59,8 @@ func TestExpandEnviron_SimpleSSMParameter(t *testing.T) {
 
 	decrypt := true
 	nofail := false
-	err := e.expandEnviron(decrypt, nofail)
+	credretry := false
+	err := e.expandEnviron(decrypt, nofail, credretry)
 	assert.NoError(t, err)
 
 	assert.Equal(t, []string{
@@ -93,7 +95,8 @@ func TestExpandEnviron_VersionedSSMParameter(t *testing.T) {
 
 	decrypt := true
 	nofail := false
-	err := e.expandEnviron(decrypt, nofail)
+	credretry := false
+	err := e.expandEnviron(decrypt, nofail, credretry)
 	assert.NoError(t, err)
 
 	assert.Equal(t, []string{
@@ -128,7 +131,8 @@ func TestExpandEnviron_CustomTemplate(t *testing.T) {
 
 	decrypt := true
 	nofail := false
-	err := e.expandEnviron(decrypt, nofail)
+	credretry := false
+	err := e.expandEnviron(decrypt, nofail, credretry)
 	assert.NoError(t, err)
 
 	assert.Equal(t, []string{
@@ -164,7 +168,8 @@ func TestExpandEnviron_DuplicateSSMParameter(t *testing.T) {
 
 	decrypt := false
 	nofail := false
-	err := e.expandEnviron(decrypt, nofail)
+	credretry := false
+	err := e.expandEnviron(decrypt, nofail, credretry)
 	assert.NoError(t, err)
 
 	assert.Equal(t, []string{
@@ -198,7 +203,8 @@ func TestExpandEnviron_InvalidParameters(t *testing.T) {
 
 	decrypt := false
 	nofail := false
-	err := e.expandEnviron(decrypt, nofail)
+	credretry := false
+	err := e.expandEnviron(decrypt, nofail, credretry)
 	assert.Equal(t, &invalidParametersError{InvalidParameters: []string{"secret"}}, err)
 
 	c.AssertExpectations(t)
@@ -225,7 +231,8 @@ func TestExpandEnviron_InvalidParametersNoFail(t *testing.T) {
 
 	decrypt := false
 	nofail := true
-	err := e.expandEnviron(decrypt, nofail)
+	credretry := false
+	err := e.expandEnviron(decrypt, nofail, credretry)
 
   assert.NoError(t, err)
 	assert.Equal(t, []string{
@@ -270,7 +277,8 @@ func TestExpandEnviron_BatchParameters(t *testing.T) {
 
 	decrypt := false
 	nofail := false
-	err := e.expandEnviron(decrypt, nofail)
+	credretry := false
+	err := e.expandEnviron(decrypt, nofail, credretry)
 	assert.NoError(t, err)
 
 	assert.Equal(t, []string{

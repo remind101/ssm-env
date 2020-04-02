@@ -7,6 +7,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"os"
 	"os/exec"
+	"reflect"
 	"strings"
 	"syscall"
 	"text/template"
@@ -185,18 +186,19 @@ func (e *expander) expandEnviron(decrypt bool, nofail bool, credretry bool) erro
 
     var values map[string]string
 		for {
-			var err error
-			values, err = e.getParameters(names[i:j], decrypt, nofail)
+			tmpValues, err := e.getParameters(names[i:j], decrypt, nofail)
+			values = tmpValues
 			if err != nil {
-				awsErr := err.(awserr.Error)
-				if awsErr.Code() == "NoCredentialProviders" && credretry {
-					fmt.Fprintf(os.Stderr, "Encountered NoCredentialProviders. Retrying...\n")
-					time.Sleep(time.Duration(2) * time.Second)
-					continue
-				} else {
-					if ! nofail {
-						return err
+				if reflect.TypeOf(err).Kind() != reflect.TypeOf(new(invalidParametersError)).Kind() {
+					awsErr := err.(awserr.Error)
+					if awsErr.Code() == "NoCredentialProviders" && credretry {
+						fmt.Fprintf(os.Stderr, "Encountered NoCredentialProviders. Retrying...\n")
+						time.Sleep(time.Duration(2) * time.Second)
+						continue
 					}
+				}
+				if ! nofail {
+					return err
 				}
 			}
 			break
