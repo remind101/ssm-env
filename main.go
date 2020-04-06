@@ -5,9 +5,12 @@ import (
 	"flag"
 	"fmt"
 	"github.com/aws/aws-sdk-go/aws/awserr"
+	"net"
+	"net/http"
 	"os"
 	"os/exec"
 	"reflect"
+	"strconv"
 	"strings"
 	"syscall"
 	"text/template"
@@ -17,6 +20,8 @@ import (
 	"github.com/aws/aws-sdk-go/aws/ec2metadata"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/ssm"
+
+	 "golang.org/x/net/http2"
 
 )
 
@@ -81,7 +86,9 @@ func main() {
 }
 
 func awsSession() (*session.Session, error) {
-	sess := session.Must(session.NewSession())
+	sess := session.Must(session.NewSession(&aws.Config{
+		HTTPClient: NewHTTPClient(),
+	}))
 	if len(aws.StringValue(sess.Config.Region)) == 0 {
 		meta := ec2metadata.New(sess)
 		identity, err := meta.GetInstanceIdentityDocument()
@@ -94,6 +101,7 @@ func awsSession() (*session.Session, error) {
 		}
 		return session.NewSession(&aws.Config{
 			Region: aws.String(identity.Region),
+			HTTPClient: NewHTTPClient(),
 		})
 	}
 	return sess, nil
@@ -287,4 +295,37 @@ func must(err error) {
 		fmt.Fprintf(os.Stderr, "ssm-env: %v\n", err)
 		os.Exit(1)
 	}
+}
+
+func NewHTTPClient() *http.Client {
+	  timeout := time.Duration(getEnv("AWS_METADATA_SERVICE_TIMEOUT", 5)) * time.Second
+    tr := &http.Transport{
+        ResponseHeaderTimeout: timeout,
+        Proxy: http.ProxyFromEnvironment,
+        DialContext: (&net.Dialer{
+            KeepAlive: 30 * time.Second,
+            DualStack: true,
+            Timeout:   timeout,
+        }).DialContext,
+        MaxIdleConns:          100,
+        IdleConnTimeout:       90 * time.Second,
+        TLSHandshakeTimeout:   timeout,
+        MaxIdleConnsPerHost:   10,
+        ExpectContinueTimeout: timeout,
+    }
+
+    // So client makes HTTP/2 requests
+    http2.ConfigureTransport(tr)
+
+    return &http.Client{
+        Transport: tr,
+    }
+}
+
+func getEnv(key string, fallback int) int {
+    value, err := strconv.Atoi(key)
+		if err != nil {
+			return fallback
+		}
+    return value
 }
