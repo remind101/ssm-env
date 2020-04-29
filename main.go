@@ -49,6 +49,7 @@ func main() {
 		template = flag.String("template", DefaultTemplate, "The template used to determine what the SSM parameter name is for an environment variable. When this template returns an empty string, the env variable is not an SSM parameter")
 		decrypt  = flag.Bool("with-decryption", false, "Will attempt to decrypt the parameter, and set the env var as plaintext")
 		nofail  = flag.Bool("no-fail", false, "Don't fail if error retrieving parameter")
+		debug = flag.Bool("debug", false, "Enable debug logs")
 	)
 	flag.Parse()
 	args := flag.Args()
@@ -68,15 +69,19 @@ func main() {
 	e := &expander{
 		batchSize: defaultBatchSize,
 		t:         t,
-		ssm:       ssm.New(session.Must(awsSession())),
+		ssm:       ssm.New(session.Must(awsSession(*debug))),
 		os:        os,
 	}
 	must(e.expandEnviron(*decrypt, *nofail))
 	must(syscall.Exec(path, args[0:], os.Environ()))
 }
 
-func awsSession() (*session.Session, error) {
-	sess := session.Must(session.NewSession())
+func awsSession(debug bool) (*session.Session, error) {
+	config := aws.NewConfig()
+	if debug {
+		config.WithLogLevel(aws.LogDebugWithHTTPBody)
+	}
+	sess := session.Must(session.NewSession(config))
 	if len(aws.StringValue(sess.Config.Region)) == 0 {
 		meta := ec2metadata.New(sess)
 		identity, err := meta.GetInstanceIdentityDocument()
