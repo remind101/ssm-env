@@ -15,6 +15,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws/ec2metadata"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/ssm"
+	log "github.com/sirupsen/logrus"
 )
 
 const (
@@ -26,6 +27,12 @@ const (
 	// The SSM API limits this to a maximum of 10 at the time of writing.
 	defaultBatchSize = 10
 )
+
+func init() {
+	log.SetFormatter(&log.JSONFormatter{})
+	log.SetOutput(os.Stdout)
+	log.SetLevel(log.WarnLevel)
+}
 
 // TemplateFuncs are helper functions provided to the template.
 var TemplateFuncs = template.FuncMap{
@@ -66,6 +73,9 @@ func main() {
 
 	t, err := parseTemplate(*template)
 	must(err)
+	if *debug {
+		log.SetLevel(log.DebugLevel)
+	}
 	e := &expander{
 		batchSize: defaultBatchSize,
 		t:         t,
@@ -83,6 +93,7 @@ func awsSession(debug bool) (*session.Session, error) {
 	}
 	sess := session.Must(session.NewSession(config))
 	if len(aws.StringValue(sess.Config.Region)) == 0 {
+		log.Debug("aws session unable to detect the region, trying to check with ec2 metadata")
 		meta := ec2metadata.New(sess)
 		identity, err := meta.GetInstanceIdentityDocument()
 		if err != nil {
