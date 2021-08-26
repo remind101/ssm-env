@@ -1,8 +1,8 @@
 module github.com/remind101/ssm-env
 
-go 1.12
+go 1.16
 
 require (
-	github.com/aws/aws-sdk-go v1.29.8
-	github.com/stretchr/testify v1.4.0
+	github.com/aws/aws-sdk-go v1.40.31
+	github.com/stretchr/testify v1.7.0
 )
