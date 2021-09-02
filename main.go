@@ -4,12 +4,13 @@ import (
 	"bytes"
 	"flag"
 	"fmt"
-	"github.com/aws/aws-sdk-go/aws/awserr"
 	"os"
 	"os/exec"
 	"strings"
 	"syscall"
 	"text/template"
+
+	"github.com/aws/aws-sdk-go/aws/awserr"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/ec2metadata"
@@ -48,7 +49,7 @@ func main() {
 	var (
 		template = flag.String("template", DefaultTemplate, "The template used to determine what the SSM parameter name is for an environment variable. When this template returns an empty string, the env variable is not an SSM parameter")
 		decrypt  = flag.Bool("with-decryption", false, "Will attempt to decrypt the parameter, and set the env var as plaintext")
-		nofail  = flag.Bool("no-fail", false, "Don't fail if error retrieving parameter")
+		nofail   = flag.Bool("no-fail", false, "Don't fail if error retrieving parameter")
 	)
 	flag.Parse()
 	args := flag.Args()
@@ -152,6 +153,7 @@ func (e *expander) expandEnviron(decrypt bool, nofail bool) error {
 
 		parameter, err := e.parameter(k, v)
 		if err != nil {
+			// TODO: Should this _also_ not error if nofail is passed?
 			return fmt.Errorf("determining name of parameter: %v", err)
 		}
 
@@ -207,12 +209,12 @@ func (e *expander) getParameters(names []string, decrypt bool, nofail bool) (map
 	}
 
 	resp, err := e.ssm.GetParameters(input)
-	if err != nil && ! nofail {
+	if err != nil && !nofail {
 		return values, err
 	}
 
 	if len(resp.InvalidParameters) > 0 {
-		if ! nofail {
+		if !nofail {
 			return values, newInvalidParametersError(resp)
 		}
 		fmt.Fprintf(os.Stderr, "ssm-env: %v\n", newInvalidParametersError(resp))
