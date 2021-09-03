@@ -69,15 +69,35 @@ func main() {
 	e := &expander{
 		batchSize: defaultBatchSize,
 		t:         t,
-		ssm:       ssm.New(session.Must(awsSession())),
+		ssm:       &lazySsmClient{},
 		os:        os,
 	}
 	must(e.expandEnviron(*decrypt, *nofail))
 	must(syscall.Exec(path, args[0:], os.Environ()))
 }
 
-func awsSession() (*session.Session, error) {
-	sess := session.Must(session.NewSession())
+type lazySsmClient struct {
+	ssm ssmClient
+}
+
+func (c *lazySsmClient) GetParameters(input *ssm.GetParametersInput) (*ssm.GetParametersOutput, error) {
+	if c.ssm == nil {
+		sess, err := c.awsSession()
+		if err != nil {
+			return nil, err
+		}
+		c.ssm = ssm.New(sess)
+	}
+	return c.ssm.GetParameters(input)
+}
+
+func (c *lazySsmClient) awsSession() (*session.Session, error) {
+	sess, err := session.NewSession(&aws.Config{
+		CredentialsChainVerboseErrors: aws.Bool(true),
+	})
+	if err != nil {
+		return nil, err
+	}
 	if len(aws.StringValue(sess.Config.Region)) == 0 {
 		meta := ec2metadata.New(sess)
 		identity, err := meta.GetInstanceIdentityDocument()
