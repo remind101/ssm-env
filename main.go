@@ -10,8 +10,6 @@ import (
 	"syscall"
 	"text/template"
 
-	"github.com/aws/aws-sdk-go/aws/awserr"
-
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/ec2metadata"
 	"github.com/aws/aws-sdk-go/aws/session"
@@ -69,28 +67,50 @@ func main() {
 	e := &expander{
 		batchSize: defaultBatchSize,
 		t:         t,
-		ssm:       ssm.New(session.Must(awsSession())),
+		ssm:       &lazySSMClient{},
 		os:        os,
 	}
 	must(e.expandEnviron(*decrypt, *nofail))
 	must(syscall.Exec(path, args[0:], os.Environ()))
 }
 
-func awsSession() (*session.Session, error) {
-	sess := session.Must(session.NewSession())
+// lazySSMClient wraps the AWS SDK SSM client such that the AWS session and
+// SSM client are not actually initialized until GetParameters is called for
+// the first time.
+type lazySSMClient struct {
+	ssm ssmClient
+}
+
+func (c *lazySSMClient) GetParameters(input *ssm.GetParametersInput) (*ssm.GetParametersOutput, error) {
+	// Initialize the SSM client (and AWS session) if it hasn't been already.
+	if c.ssm == nil {
+		sess, err := c.awsSession()
+		if err != nil {
+			return nil, err
+		}
+		c.ssm = ssm.New(sess)
+	}
+	return c.ssm.GetParameters(input)
+}
+
+func (c *lazySSMClient) awsSession() (*session.Session, error) {
+	sess, err := session.NewSession(&aws.Config{
+		CredentialsChainVerboseErrors: aws.Bool(true),
+	})
+	if err != nil {
+		return nil, err
+	}
+	// Clients will throw errors if a region isn't configured, so if one hasn't
+	// been set already try to look up the region we're running in using the
+	// EC2 Instance Metadata Endpoint.
 	if len(aws.StringValue(sess.Config.Region)) == 0 {
 		meta := ec2metadata.New(sess)
 		identity, err := meta.GetInstanceIdentityDocument()
-		if err != nil {
-			awsErr := err.(awserr.Error)
-			if awsErr.Code() == "EC2MetadataRequestError" {
-				return sess, nil
-			}
-			return nil, err
+		if err == nil {
+			sess.Config.Region = aws.String(identity.Region)
 		}
-		return session.NewSession(&aws.Config{
-			Region: aws.String(identity.Region),
-		})
+		// Ignore any errors, the client will emit a missing region error
+		// in the context of any parameter get calls anyway.
 	}
 	return sess, nil
 }
