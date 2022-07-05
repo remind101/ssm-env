@@ -6,7 +6,7 @@ export CGO_ENABLED=0
 bin/ssm-env: *.go
 	# Enforce static linking, and copy the timezone data into the runtime so we
 	# can in places like scratch images.
-	go build -ldflags '-extldflags "-static"' -tags timetzdata -o $@ .
+	go build -ldflags '-extldflags "-static"' -o $@ .
 
 test:
 	# Testing for race conditions requires CGO be enabled.
