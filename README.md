@@ -122,3 +122,6 @@ all other environment variables, including those retrieved from SSM):
             - name: SSM_EXAMPLE
               value: ssm:///foo/bar
 ```
+
+
+<sub> *If you are looking for similar tool for Azure refer to [azure-keyvault-env](https://github.com/runtheops/azure-keyvault-env), which is inpired from this ssm-env tool.* </sub>
