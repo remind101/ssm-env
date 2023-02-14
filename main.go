@@ -43,14 +43,23 @@ var TemplateFuncs = template.FuncMap{
 	"toUpper":    strings.ToUpper,
 }
 
+var version string
+
 func main() {
 	var (
-		template = flag.String("template", DefaultTemplate, "The template used to determine what the SSM parameter name is for an environment variable. When this template returns an empty string, the env variable is not an SSM parameter")
-		decrypt  = flag.Bool("with-decryption", false, "Will attempt to decrypt the parameter, and set the env var as plaintext")
-		nofail   = flag.Bool("no-fail", false, "Don't fail if error retrieving parameter")
+		template      = flag.String("template", DefaultTemplate, "The template used to determine what the SSM parameter name is for an environment variable. When this template returns an empty string, the env variable is not an SSM parameter")
+		decrypt       = flag.Bool("with-decryption", false, "Will attempt to decrypt the parameter, and set the env var as plaintext")
+		nofail        = flag.Bool("no-fail", false, "Don't fail if error retrieving parameter")
+		print_version = flag.Bool("V", false, "Print the version and exit")
 	)
 	flag.Parse()
 	args := flag.Args()
+
+	if *print_version {
+		fmt.Printf("%s\n", version)
+
+		return
+	}
 
 	if len(args) <= 0 {
 		flag.Usage()
