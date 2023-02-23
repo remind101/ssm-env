@@ -14,6 +14,8 @@ import (
 	"github.com/isobit/cli"
 )
 
+var Version string
+
 const (
 	// DefaultTemplate is the default template used to determine what the SSM
 	// parameter name is for an environment variable.
@@ -52,6 +54,7 @@ func main() {
 }
 
 type SSMEnv struct {
+	Version        bool     `cli:"short=V,help=print version"`
 	Template       string
 	WithDecryption bool     `cli:"short=d,help=attempt to decrypt SecureString parameters"`
 	NoFail         bool     `cli:"help=ignore any errors getting parameters"`
@@ -59,6 +62,11 @@ type SSMEnv struct {
 }
 
 func (s *SSMEnv) Run() error {
+	if s.Version {
+		fmt.Println(Version)
+		return nil
+	}
+
 	if len(s.Args) <= 0 {
 		return cli.UsageErrorf("at least one arg is required")
 	}
