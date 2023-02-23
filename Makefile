@@ -1,7 +1,18 @@
-.PHONY: test
+VERSION := $(if $(VERSION),$(VERSION),$(shell git rev-parse HEAD))
+LDFLAGS := -X main.Version=$(VERSION)
 
-bin/ssm-env: *.go
-	CGO_ENABLED=0 go build -o $@ .
+export CGO_ENABLED=0
 
-test:
-	go test -race $(shell go list ./... | grep -v /vendor/)
+.PHONY: bin/ssm-env
+bin/ssm-env:
+	go build -ldflags "$(LDFLAGS)" -o $@ .
+
+.PHONY: fmt
+fmt:
+	go fmt ./...
+
+.PHONY: lint
+lint:
+	@test -z $(shell gofmt -l . | tee /dev/stderr) || { echo "files above are not go fmt"; exit 1; }
+	go vet ./...
+	golangci-lint run
