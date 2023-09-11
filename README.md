@@ -58,11 +58,10 @@ NEW_SECRET=super_secret_v2
 A common use case is to use `ssm-env` as a Docker ENTRYPOINT. You can copy and paste the following into the top of a Dockerfile:
 
 ```dockerfile
-RUN curl -L https://github.com/remind101/ssm-env/releases/download/v0.0.4/ssm-env > /usr/local/bin/ssm-env && \
-      cd /usr/local/bin && \
-      echo 4a5140b04f8b3f84d16a93540daa7bbd ssm-env | md5sum -c && \
-      chmod +x ssm-env
-ENTRYPOINT ["/usr/local/bin/ssm-env", "-with-decryption"]
+RUN curl -sSfL -o /usr/local/bin/ssm-env https://github.com/remind101/ssm-env/releases/download/v0.0.5/ssm-env \
+    && cd /usr/local/bin \
+    && echo "babf40382bcd260f0d8d4575a32d5ec33fb08fefd29f12ffd800fbe738c41021  ssm-env" | sha256sum -c \
+    && chmod +x ssm-env
 ```
 
 Now, any command executed with the Docker image will be funneled through ssm-env.
@@ -78,8 +77,11 @@ FROM alpine:latest
 # ...copy code
 
 # ssm-env: See https://github.com/remind101/ssm-env
-RUN wget -O /usr/local/bin/ssm-env https://github.com/remind101/ssm-env/releases/download/v0.0.3/ssm-env
-RUN chmod +x /usr/local/bin/ssm-env
+RUN apk add curl
+RUN curl -sSfL -o /usr/local/bin/ssm-env https://github.com/remind101/ssm-env/releases/download/v0.0.5/ssm-env \
+    && cd /usr/local/bin \
+    && echo "babf40382bcd260f0d8d4575a32d5ec33fb08fefd29f12ffd800fbe738c41021  ssm-env" | sha256sum -c \
+    && chmod +x ssm-env
 
 # Alpine Linux doesn't include root certificates which ssm-env needs to talk to AWS.
 # See https://simplydistributed.wordpress.com/2018/05/22/certificate-error-with-go-http-client-in-alpine-docker/
