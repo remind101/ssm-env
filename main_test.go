@@ -17,14 +17,16 @@ func TestExpandEnviron_NoSSMParameters(t *testing.T) {
 	c := new(mockSSM)
 	e := expander{
 		t:         template.Must(parseTemplate(DefaultTemplate)),
-		os:        os,
+		os:        &os,
 		ssm:       c,
 		batchSize: defaultBatchSize,
 	}
 
 	decrypt := false
 	nofail := false
-	err := e.expandEnviron(decrypt, nofail)
+	print := false
+	vars, err := e.expandEnviron(decrypt, nofail)
+	e.setEnviron(print, vars)
 	assert.NoError(t, err)
 
 	assert.Equal(t, []string{
@@ -35,12 +37,38 @@ func TestExpandEnviron_NoSSMParameters(t *testing.T) {
 	c.AssertExpectations(t)
 }
 
+func TestExpandEnviron_NoSSMParametersPrint(t *testing.T) {
+	os := newFakeEnviron()
+	c := new(mockSSM)
+	e := expander{
+		t:         template.Must(parseTemplate(DefaultTemplate)),
+		os:        &os,
+		ssm:       c,
+		batchSize: defaultBatchSize,
+	}
+
+	decrypt := false
+	nofail := false
+	print := false
+	vars, err := e.expandEnviron(decrypt, nofail)
+	e.setEnviron(print, vars)
+	assert.NoError(t, err)
+
+	assert.Equal(t, []string{
+		"SHELL=/bin/bash",
+		"TERM=screen-256color",
+	}, os.Environ())
+	assert.Equal(t, "", os.Stdout())
+
+	c.AssertExpectations(t)
+}
+
 func TestExpandEnviron_SimpleSSMParameter(t *testing.T) {
 	os := newFakeEnviron()
 	c := new(mockSSM)
 	e := expander{
 		t:         template.Must(parseTemplate(DefaultTemplate)),
-		os:        os,
+		os:        &os,
 		ssm:       c,
 		batchSize: defaultBatchSize,
 	}
@@ -58,7 +86,9 @@ func TestExpandEnviron_SimpleSSMParameter(t *testing.T) {
 
 	decrypt := true
 	nofail := false
-	err := e.expandEnviron(decrypt, nofail)
+	print := false
+	vars, err := e.expandEnviron(decrypt, nofail)
+	e.setEnviron(print, vars)
 	assert.NoError(t, err)
 
 	assert.Equal(t, []string{
@@ -70,12 +100,50 @@ func TestExpandEnviron_SimpleSSMParameter(t *testing.T) {
 	c.AssertExpectations(t)
 }
 
+func TestExpandEnviron_SimpleSSMParameterPrint(t *testing.T) {
+	os := newFakeEnviron()
+	c := new(mockSSM)
+	e := expander{
+		t:         template.Must(parseTemplate(DefaultTemplate)),
+		os:        &os,
+		ssm:       c,
+		batchSize: defaultBatchSize,
+	}
+
+	os.Setenv("SUPER_SECRET", "ssm://secret")
+
+	c.On("GetParameters", &ssm.GetParametersInput{
+		Names:          []*string{aws.String("secret")},
+		WithDecryption: aws.Bool(true),
+	}).Return(&ssm.GetParametersOutput{
+		Parameters: []*ssm.Parameter{
+			{Name: aws.String("secret"), Value: aws.String("hehe")},
+		},
+	}, nil)
+
+	decrypt := true
+	nofail := false
+	print := true
+	vars, err := e.expandEnviron(decrypt, nofail)
+	e.setEnviron(print, vars)
+	assert.NoError(t, err)
+
+	assert.Equal(t, []string{
+		"SHELL=/bin/bash",
+		"SUPER_SECRET=ssm://secret",
+		"TERM=screen-256color",
+	}, os.Environ())
+	assert.Equal(t, "SUPER_SECRET=hehe", os.Stdout())
+
+	c.AssertExpectations(t)
+}
+
 func TestExpandEnviron_VersionedSSMParameter(t *testing.T) {
 	os := newFakeEnviron()
 	c := new(mockSSM)
 	e := expander{
 		t:         template.Must(parseTemplate(DefaultTemplate)),
-		os:        os,
+		os:        &os,
 		ssm:       c,
 		batchSize: defaultBatchSize,
 	}
@@ -93,7 +161,9 @@ func TestExpandEnviron_VersionedSSMParameter(t *testing.T) {
 
 	decrypt := true
 	nofail := false
-	err := e.expandEnviron(decrypt, nofail)
+	print := false
+	vars, err := e.expandEnviron(decrypt, nofail)
+	e.setEnviron(print, vars)
 	assert.NoError(t, err)
 
 	assert.Equal(t, []string{
@@ -110,7 +180,7 @@ func TestExpandEnviron_CustomTemplate(t *testing.T) {
 	c := new(mockSSM)
 	e := expander{
 		t:         template.Must(parseTemplate(`{{ if eq .Name "SUPER_SECRET" }}secret{{end}}`)),
-		os:        os,
+		os:        &os,
 		ssm:       c,
 		batchSize: defaultBatchSize,
 	}
@@ -128,7 +198,9 @@ func TestExpandEnviron_CustomTemplate(t *testing.T) {
 
 	decrypt := true
 	nofail := false
-	err := e.expandEnviron(decrypt, nofail)
+	print := false
+	vars, err := e.expandEnviron(decrypt, nofail)
+	e.setEnviron(print, vars)
 	assert.NoError(t, err)
 
 	assert.Equal(t, []string{
@@ -145,7 +217,7 @@ func TestExpandEnviron_DuplicateSSMParameter(t *testing.T) {
 	c := new(mockSSM)
 	e := expander{
 		t:         template.Must(parseTemplate(DefaultTemplate)),
-		os:        os,
+		os:        &os,
 		ssm:       c,
 		batchSize: defaultBatchSize,
 	}
@@ -164,7 +236,9 @@ func TestExpandEnviron_DuplicateSSMParameter(t *testing.T) {
 
 	decrypt := false
 	nofail := false
-	err := e.expandEnviron(decrypt, nofail)
+	print := false
+	vars, err := e.expandEnviron(decrypt, nofail)
+	e.setEnviron(print, vars)
 	assert.NoError(t, err)
 
 	assert.Equal(t, []string{
@@ -182,7 +256,7 @@ func TestExpandEnviron_InvalidParameters(t *testing.T) {
 	c := new(mockSSM)
 	e := expander{
 		t:         template.Must(parseTemplate(DefaultTemplate)),
-		os:        os,
+		os:        &os,
 		ssm:       c,
 		batchSize: defaultBatchSize,
 	}
@@ -198,7 +272,9 @@ func TestExpandEnviron_InvalidParameters(t *testing.T) {
 
 	decrypt := false
 	nofail := false
-	err := e.expandEnviron(decrypt, nofail)
+	print := false
+	vars, err := e.expandEnviron(decrypt, nofail)
+	e.setEnviron(print, vars)
 	assert.Equal(t, &invalidParametersError{InvalidParameters: []string{"secret"}}, err)
 
 	c.AssertExpectations(t)
@@ -209,7 +285,7 @@ func TestExpandEnviron_InvalidParametersNoFail(t *testing.T) {
 	c := new(mockSSM)
 	e := expander{
 		t:         template.Must(parseTemplate(DefaultTemplate)),
-		os:        os,
+		os:        &os,
 		ssm:       c,
 		batchSize: defaultBatchSize,
 	}
@@ -225,9 +301,11 @@ func TestExpandEnviron_InvalidParametersNoFail(t *testing.T) {
 
 	decrypt := false
 	nofail := true
-	err := e.expandEnviron(decrypt, nofail)
+	print := false
+	vars, err := e.expandEnviron(decrypt, nofail)
+	e.setEnviron(print, vars)
 
-  assert.NoError(t, err)
+	assert.NoError(t, err)
 	assert.Equal(t, []string{
 		"SHELL=/bin/bash",
 		"SUPER_SECRET=ssm://secret",
@@ -242,7 +320,7 @@ func TestExpandEnviron_BatchParameters(t *testing.T) {
 	c := new(mockSSM)
 	e := expander{
 		t:         template.Must(parseTemplate(DefaultTemplate)),
-		os:        os,
+		os:        &os,
 		ssm:       c,
 		batchSize: 1,
 	}
@@ -270,7 +348,9 @@ func TestExpandEnviron_BatchParameters(t *testing.T) {
 
 	decrypt := false
 	nofail := false
-	err := e.expandEnviron(decrypt, nofail)
+	print := false
+	vars, err := e.expandEnviron(decrypt, nofail)
+	e.setEnviron(print, vars)
 	assert.NoError(t, err)
 
 	assert.Equal(t, []string{
@@ -283,18 +363,24 @@ func TestExpandEnviron_BatchParameters(t *testing.T) {
 	c.AssertExpectations(t)
 }
 
-type fakeEnviron map[string]string
+type fakeEnviron struct {
+	env    map[string]string
+	stdout string
+}
 
 func newFakeEnviron() fakeEnviron {
 	return fakeEnviron{
-		"SHELL": "/bin/bash",
-		"TERM":  "screen-256color",
+		env: map[string]string{
+			"SHELL": "/bin/bash",
+			"TERM":  "screen-256color",
+		},
+		stdout: "",
 	}
 }
 
 func (e fakeEnviron) Environ() []string {
 	var env sort.StringSlice
-	for k, v := range e {
+	for k, v := range e.env {
 		env = append(env, fmt.Sprintf("%s=%s", k, v))
 	}
 	env.Sort()
@@ -302,7 +388,21 @@ func (e fakeEnviron) Environ() []string {
 }
 
 func (e fakeEnviron) Setenv(key, val string) {
-	e[key] = val
+	e.env[key] = val
+}
+
+func (e fakeEnviron) Getenv(key string) string {
+	return e.env[key]
+}
+
+func (e *fakeEnviron) Write(s string) error {
+	e.stdout += s
+
+	return nil
+}
+
+func (e fakeEnviron) Stdout() string {
+	return e.stdout
 }
 
 type mockSSM struct {
