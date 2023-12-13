@@ -62,6 +62,8 @@ RUN curl -sSfL -o /usr/local/bin/ssm-env https://github.com/remind101/ssm-env/re
     && cd /usr/local/bin \
     && echo "babf40382bcd260f0d8d4575a32d5ec33fb08fefd29f12ffd800fbe738c41021  ssm-env" | sha256sum -c \
     && chmod +x ssm-env
+
+ENTRYPOINT ["/usr/local/bin/ssm-env", "-with-decryption"]
 ```
 
 Now, any command executed with the Docker image will be funneled through ssm-env.
