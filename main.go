@@ -187,6 +187,11 @@ func (e *expander) expandEnviron(decrypt bool, nofail bool) error {
 		}
 
 		if parameter != nil {
+			// Ensure that this is a valid SSM parameter that we can actually resolve.
+			if !strings.HasPrefix(*parameter, "/") && !nofail {
+				return fmt.Errorf("SSM parameters must have a leading '/' (ssm:///<path>): %s", envvar)
+			}
+
 			uniqNames[*parameter] = true
 			ssmVars = append(ssmVars, ssmVar{k, *parameter})
 		}
