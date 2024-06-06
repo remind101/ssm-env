@@ -45,14 +45,14 @@ func TestExpandEnviron_SimpleSSMParameter(t *testing.T) {
 		batchSize: defaultBatchSize,
 	}
 
-	os.Setenv("SUPER_SECRET", "ssm://secret")
+	os.Setenv("SUPER_SECRET", "ssm:///secret")
 
 	c.On("GetParameters", &ssm.GetParametersInput{
-		Names:          []*string{aws.String("secret")},
+		Names:          []*string{aws.String("/secret")},
 		WithDecryption: aws.Bool(true),
 	}).Return(&ssm.GetParametersOutput{
 		Parameters: []*ssm.Parameter{
-			{Name: aws.String("secret"), Value: aws.String("hehe")},
+			{Name: aws.String("/secret"), Value: aws.String("hehe")},
 		},
 	}, nil)
 
@@ -80,14 +80,14 @@ func TestExpandEnviron_VersionedSSMParameter(t *testing.T) {
 		batchSize: defaultBatchSize,
 	}
 
-	os.Setenv("SUPER_SECRET", "ssm://secret:1")
+	os.Setenv("SUPER_SECRET", "ssm:///secret:1")
 
 	c.On("GetParameters", &ssm.GetParametersInput{
-		Names:          []*string{aws.String("secret:1")},
+		Names:          []*string{aws.String("/secret:1")},
 		WithDecryption: aws.Bool(true),
 	}).Return(&ssm.GetParametersOutput{
 		Parameters: []*ssm.Parameter{
-			{Name: aws.String("secret"), Value: aws.String("versioned"), Selector: aws.String(":1")},
+			{Name: aws.String("/secret"), Value: aws.String("versioned"), Selector: aws.String(":1")},
 		},
 	}, nil)
 
@@ -109,20 +109,20 @@ func TestExpandEnviron_CustomTemplate(t *testing.T) {
 	os := newFakeEnviron()
 	c := new(mockSSM)
 	e := expander{
-		t:         template.Must(parseTemplate(`{{ if eq .Name "SUPER_SECRET" }}secret{{end}}`)),
+		t:         template.Must(parseTemplate(`{{ if eq .Name "SUPER_SECRET" }}/secret{{end}}`)),
 		os:        os,
 		ssm:       c,
 		batchSize: defaultBatchSize,
 	}
 
-	os.Setenv("SUPER_SECRET", "ssm://secret")
+	os.Setenv("SUPER_SECRET", "ssm:///secret")
 
 	c.On("GetParameters", &ssm.GetParametersInput{
-		Names:          []*string{aws.String("secret")},
+		Names:          []*string{aws.String("/secret")},
 		WithDecryption: aws.Bool(true),
 	}).Return(&ssm.GetParametersOutput{
 		Parameters: []*ssm.Parameter{
-			{Name: aws.String("secret"), Value: aws.String("hehe")},
+			{Name: aws.String("/secret"), Value: aws.String("hehe")},
 		},
 	}, nil)
 
@@ -150,15 +150,15 @@ func TestExpandEnviron_DuplicateSSMParameter(t *testing.T) {
 		batchSize: defaultBatchSize,
 	}
 
-	os.Setenv("SUPER_SECRET_A", "ssm://secret")
-	os.Setenv("SUPER_SECRET_B", "ssm://secret")
+	os.Setenv("SUPER_SECRET_A", "ssm:///secret")
+	os.Setenv("SUPER_SECRET_B", "ssm:///secret")
 
 	c.On("GetParameters", &ssm.GetParametersInput{
-		Names:          []*string{aws.String("secret")},
+		Names:          []*string{aws.String("/secret")},
 		WithDecryption: aws.Bool(false),
 	}).Return(&ssm.GetParametersOutput{
 		Parameters: []*ssm.Parameter{
-			{Name: aws.String("secret"), Value: aws.String("hehe")},
+			{Name: aws.String("/secret"), Value: aws.String("hehe")},
 		},
 	}, nil)
 
@@ -177,7 +177,7 @@ func TestExpandEnviron_DuplicateSSMParameter(t *testing.T) {
 	c.AssertExpectations(t)
 }
 
-func TestExpandEnviron_InvalidParameters(t *testing.T) {
+func TestExpandEnviron_MalformedParametersFail(t *testing.T) {
 	os := newFakeEnviron()
 	c := new(mockSSM)
 	e := expander{
@@ -189,22 +189,13 @@ func TestExpandEnviron_InvalidParameters(t *testing.T) {
 
 	os.Setenv("SUPER_SECRET", "ssm://secret")
 
-	c.On("GetParameters", &ssm.GetParametersInput{
-		Names:          []*string{aws.String("secret")},
-		WithDecryption: aws.Bool(false),
-	}).Return(&ssm.GetParametersOutput{
-		InvalidParameters: []*string{aws.String("secret")},
-	}, nil)
-
 	decrypt := false
 	nofail := false
 	err := e.expandEnviron(decrypt, nofail)
-	assert.Equal(t, &invalidParametersError{InvalidParameters: []string{"secret"}}, err)
-
-	c.AssertExpectations(t)
+	assert.Containsf(t, err.Error(), "SSM parameters must have a leading '/'", "")
 }
 
-func TestExpandEnviron_InvalidParametersNoFail(t *testing.T) {
+func TestExpandEnviron_MalformedParametersNofail(t *testing.T) {
 	os := newFakeEnviron()
 	c := new(mockSSM)
 	e := expander{
@@ -227,10 +218,70 @@ func TestExpandEnviron_InvalidParametersNoFail(t *testing.T) {
 	nofail := true
 	err := e.expandEnviron(decrypt, nofail)
 
-  assert.NoError(t, err)
+	assert.NoError(t, err)
 	assert.Equal(t, []string{
 		"SHELL=/bin/bash",
 		"SUPER_SECRET=ssm://secret",
+		"TERM=screen-256color",
+	}, os.Environ())
+
+	c.AssertExpectations(t)
+}
+
+func TestExpandEnviron_InvalidParameters(t *testing.T) {
+	os := newFakeEnviron()
+	c := new(mockSSM)
+	e := expander{
+		t:         template.Must(parseTemplate(DefaultTemplate)),
+		os:        os,
+		ssm:       c,
+		batchSize: defaultBatchSize,
+	}
+
+	os.Setenv("SUPER_SECRET", "ssm:///bad.secret")
+
+	c.On("GetParameters", &ssm.GetParametersInput{
+		Names:          []*string{aws.String("/bad.secret")},
+		WithDecryption: aws.Bool(false),
+	}).Return(&ssm.GetParametersOutput{
+		InvalidParameters: []*string{aws.String("/bad.secret")},
+	}, nil)
+
+	decrypt := false
+	nofail := false
+	err := e.expandEnviron(decrypt, nofail)
+	assert.Equal(t, &invalidParametersError{InvalidParameters: []string{"/bad.secret"}}, err)
+
+	c.AssertExpectations(t)
+}
+
+func TestExpandEnviron_InvalidParametersNoFail(t *testing.T) {
+	os := newFakeEnviron()
+	c := new(mockSSM)
+	e := expander{
+		t:         template.Must(parseTemplate(DefaultTemplate)),
+		os:        os,
+		ssm:       c,
+		batchSize: defaultBatchSize,
+	}
+
+	os.Setenv("SUPER_SECRET", "ssm:///secret")
+
+	c.On("GetParameters", &ssm.GetParametersInput{
+		Names:          []*string{aws.String("/secret")},
+		WithDecryption: aws.Bool(false),
+	}).Return(&ssm.GetParametersOutput{
+		InvalidParameters: []*string{aws.String("/secret")},
+	}, nil)
+
+	decrypt := false
+	nofail := true
+	err := e.expandEnviron(decrypt, nofail)
+
+	assert.NoError(t, err)
+	assert.Equal(t, []string{
+		"SHELL=/bin/bash",
+		"SUPER_SECRET=ssm:///secret",
 		"TERM=screen-256color",
 	}, os.Environ())
 
@@ -247,24 +298,24 @@ func TestExpandEnviron_BatchParameters(t *testing.T) {
 		batchSize: 1,
 	}
 
-	os.Setenv("SUPER_SECRET_A", "ssm://secret-a")
-	os.Setenv("SUPER_SECRET_B", "ssm://secret-b")
+	os.Setenv("SUPER_SECRET_A", "ssm:///secret-a")
+	os.Setenv("SUPER_SECRET_B", "ssm:///secret-b")
 
 	c.On("GetParameters", &ssm.GetParametersInput{
-		Names:          []*string{aws.String("secret-a")},
+		Names:          []*string{aws.String("/secret-a")},
 		WithDecryption: aws.Bool(false),
 	}).Return(&ssm.GetParametersOutput{
 		Parameters: []*ssm.Parameter{
-			{Name: aws.String("secret-a"), Value: aws.String("val-a")},
+			{Name: aws.String("/secret-a"), Value: aws.String("val-a")},
 		},
 	}, nil)
 
 	c.On("GetParameters", &ssm.GetParametersInput{
-		Names:          []*string{aws.String("secret-b")},
+		Names:          []*string{aws.String("/secret-b")},
 		WithDecryption: aws.Bool(false),
 	}).Return(&ssm.GetParametersOutput{
 		Parameters: []*ssm.Parameter{
-			{Name: aws.String("secret-b"), Value: aws.String("val-b")},
+			{Name: aws.String("/secret-b"), Value: aws.String("val-b")},
 		},
 	}, nil)
 
