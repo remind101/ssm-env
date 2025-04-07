@@ -19,7 +19,7 @@ jobs:
     steps:
       - checkout
       # Compile, and make sure it's not dynamically linked.
-      - run: make bin/ssm-env && ! ldd bin/ssm-env
+      - run: make && ! ldd bin/ssm-env-linux-amd64
       - store_artifacts:
-          path: bin/ssm-env
+          path: bin
           destination: ssm-env
