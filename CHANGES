@@ -1,0 +1,80 @@
+Changes we want
+===============
+Curently ssm-env recognises variables beginning with ssm://, containing an SSM parameter
+store key after this prefix, and substitutes them with their stored value by making calls
+to the AWS SSM API. It then executes a child process with this new environment.
+
+We want it to also recognise KMS-encrypted parameters and have them substituted into
+their plaintext value in the child process environment. These variables are of the format
+
+    !kms '<encoded value>'
+
+where <encoded value> stands in for the base64-encoded KMS-encrypted secure test.
+
+Example
+=======
+Given the following example environment
+
+    VAR1=VALUE1
+    VAR2=ssm:///omnes/caeli
+    VAR3=!kms 'ABCDEFG=='
+
+currently SSM would detect that VAR2 has the appropriate prefix, query the SSM Parameter
+Database for the /omnes/caeli key and change VAR2 into the plain value it returns, while
+leaving VAR1 and VAR3 unchanged since they don't have the ssm:// prefix. Supposing the
+stored value of said key is 'plainvalue' (without quotes), the environment of the child
+process will be
+
+    VAR1=VALUE1
+    VAR2=plainvalue
+    VAR3=!kms 'ABCDEFG=='
+
+After the changes, for that sample enviroment we want ssm-env to detect that VAR3 has
+the appropriate format and query the AWS KMS service to decrypt the kms-encrypted value,
+getting the following modified environment for its child process (assuming that ABCDEFG==
+is the base64 kms-encrypted value, under certain key, of 'muchacha' (without quotes):
+
+    VAR1=VALUE
+    VAR2=plainvalue
+    VAR3=muchacha
+
+Note that the behaviour for neither VAR1 nor VAR2 is changed from the current
+implementation.
+
+Considerations
+==============
+* Express the new KMS-encrypted value format as a regular expression.
+* Attempt to mimic the current implementation as much as possible, substituting SSM API
+  calls for the necessary KMS API calls but keeping the larger structure and spirit
+  faithful to the project.
+* Add tests akin to the current ones, in which we mock the KMS service.
+
+Existing implementation
+=======================
+The wanted extra functionality is currently provided by a shell function:
+
+kms_env() {
+  env -0 | while IFS== read -r -d '' name value
+  do
+    if echo "$value" | grep -q '^!kms '
+    then
+      cipher="$(echo "$value" | sed -e 's/!kms //' | sed -e "s/'//g")"
+      # Don't quote cipher since it could already be quoted, and it's expected
+      # to be a base64-encrypted value
+      plain="$(aws kms decrypt --ciphertext-blob fileb://<(echo $cipher | base64 -d) --output text --query Plaintext | base64 -d)" \
+        || return 1
+      echo "export $name=$plain"
+    fi
+  done
+}
+
+$(kms_env) || error_exit 'Error decrypting environment with kms_env'
+
+where the last line represents the replacing of the environment for the next
+commands. Note that the behaviour is not exactly the same -- the idea of the
+kms_env() function is to be run in a shell script previous to the commands
+that will inherit the new environment, while ssm-env is expected to be run
+and passing the subsequent commands as parameters, which it will then exec.
+
+However, it's useful as a reference for the format and the means in which
+the KMS-encrypted values are received and expanded.
