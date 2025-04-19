@@ -357,6 +357,12 @@ func TestExpandEnviron_BatchParameters(t *testing.T) {
 	c.AssertExpectations(t)
 }
 
+// TestExtractKmsValue tests the KMS value extraction logic.
+// It verifies:
+// - Values starting with `!kms ` are correctly identified as KMS-encrypted
+// - The base64-encoded part is properly extracted, removing the prefix and any quotes
+// - Various formats of quoted/unquoted values are handled correctly
+// - Non-KMS values are correctly identified as not matching the pattern
 func TestExtractKmsValue(t *testing.T) {
 	// Test the KMS value extraction logic
 	
@@ -394,6 +400,12 @@ func TestExtractKmsValue(t *testing.T) {
 	}
 }
 
+// TestDecryptKmsValue tests the decryptKmsValue function directly.
+// It:
+// - Verifies base64 decoding works correctly
+// - Mocks the KMS client to simulate decryption
+// - Confirms the decryption process returns the expected value
+// - Tests the function in isolation from the rest of the environment expansion logic
 func TestDecryptKmsValue(t *testing.T) {
 	// Test the decryptKmsValue function directly
 	kmsClient := new(mockKMS)
@@ -450,6 +462,11 @@ func (e testEnviron) Setenv(key, val string) {
 	e.env[key] = val
 }
 
+// TestExpandEnviron_KMSParameter mirrors the TestExpandEnviron_SimpleSSMParameter test but for KMS variables.
+// It:
+// - Sets up an environment with a KMS-encrypted value
+// - Mocks the KMS client to return a decrypted value
+// - Verifies the environment variable gets properly replaced with the decrypted value
 func TestExpandEnviron_KMSParameter(t *testing.T) {
 	// Create a testEnviron instance that works better for our test
 	os := newTestEnviron()
@@ -490,6 +507,11 @@ func TestExpandEnviron_KMSParameter(t *testing.T) {
 	kmsClient.AssertExpectations(t)
 }
 
+// TestExpandEnviron_KMSAndSSMParameters verifies both KMS and SSM parameters can be processed together.
+// It:
+// - Creates an environment with both SSM and KMS variables
+// - Mocks both clients to return appropriate values
+// - Confirms both types of variables are correctly replaced
 func TestExpandEnviron_KMSAndSSMParameters(t *testing.T) {
 	// Create a testEnviron instance that works better for our test
 	os := newTestEnviron()
@@ -540,6 +562,10 @@ func TestExpandEnviron_KMSAndSSMParameters(t *testing.T) {
 	kmsClient.AssertExpectations(t)
 }
 
+// TestExpandEnviron_InvalidKMSParameter mirrors TestExpandEnviron_MalformedParametersFail but for KMS values.
+// It:
+// - Tests behavior when an invalid base64 string is provided as a KMS value
+// - Verifies that without the -no-fail flag, the process errors out with a base64 decoding error
 func TestExpandEnviron_InvalidKMSParameter(t *testing.T) {
 	// Create a testEnviron instance that works better for our test
 	os := newTestEnviron()
@@ -568,6 +594,11 @@ func TestExpandEnviron_InvalidKMSParameter(t *testing.T) {
 	assert.Contains(t, err.Error(), "failed to decode base64 value")
 }
 
+// TestExpandEnviron_InvalidKMSParameterNoFail mirrors TestExpandEnviron_MalformedParametersNofail for KMS values.
+// It:
+// - Tests the same case as TestExpandEnviron_InvalidKMSParameter but with -no-fail set to true
+// - Verifies that the environment variable remains unchanged when there's an error
+// - Confirms the process continues without failing, as directed by the flag
 func TestExpandEnviron_InvalidKMSParameterNoFail(t *testing.T) {
 	// Create a testEnviron instance that works better for our test
 	os := newTestEnviron()
@@ -597,6 +628,12 @@ func TestExpandEnviron_InvalidKMSParameterNoFail(t *testing.T) {
 	assert.Equal(t, "!kms INVALID-BASE64!", os.env["KMS_SECRET"])
 }
 
+// TestExpandEnviron_KMSDecryptFails tests error handling when KMS decryption fails.
+// It:
+// - Sets up a valid base64-encoded value but makes the KMS client return an error
+// - Tests both with and without the -no-fail flag to verify correct behavior
+// - Confirms error messages are properly reported
+// - Verifies that with -no-fail, the original value is preserved and execution continues
 func TestExpandEnviron_KMSDecryptFails(t *testing.T) {
 	// Create a testEnviron instance that works better for our test
 	os := newTestEnviron()
