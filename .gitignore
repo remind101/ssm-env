@@ -1,1 +1,3 @@
-bin
+/bin
+/ssm-env
+/_dist
