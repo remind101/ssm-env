@@ -16,6 +16,11 @@ You can most likely find the downloaded binary in `~/go/bin/ssm-env`
 ssm-env [-template STRING] [-with-decryption] [-no-fail] COMMAND
 ```
 
+### Parameter Formats
+
+- **SSM Parameter Store**: `ssm:///parameter-path` (fetches the value from AWS SSM Parameter Store)
+- **KMS Encrypted**: `!kms 'base64EncodedEncryptedValue'` (decrypts base64-encoded value using AWS KMS)
+
 ## Details
 
 Given the following environment:
@@ -23,14 +28,16 @@ Given the following environment:
 ```
 RAILS_ENV=production
 COOKIE_SECRET=ssm://prod.app.cookie-secret
+API_KEY=!kms 'base64EncodedEncryptedValue=='
 ```
 
-You can run the application using `ssm-env` to automatically populate the `COOKIE_SECRET` env var from SSM:
+You can run the application using `ssm-env` to automatically populate the `COOKIE_SECRET` env var from SSM and decrypt the `API_KEY` using AWS KMS:
 
 ```console
 $ ssm-env env
 RAILS_ENV=production
 COOKIE_SECRET=super-secret
+API_KEY=decrypted-value
 ```
 
 You can also configure how the parameter name is determined for an environment variable, by using the `-template` flag:

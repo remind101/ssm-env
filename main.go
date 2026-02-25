@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"encoding/base64"
 	"flag"
 	"fmt"
 	"os"
@@ -13,6 +14,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/ec2metadata"
 	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/aws/aws-sdk-go/service/kms"
 	"github.com/aws/aws-sdk-go/service/ssm"
 )
 
@@ -24,6 +26,9 @@ const (
 	// defaultBatchSize is the default number of parameters to fetch at once.
 	// The SSM API limits this to a maximum of 10 at the time of writing.
 	defaultBatchSize = 10
+	
+	// KMS prefix for variables that contain KMS-encrypted values
+	KMSPrefix = "!kms "
 )
 
 // TemplateFuncs are helper functions provided to the template.
@@ -77,6 +82,7 @@ func main() {
 		batchSize: defaultBatchSize,
 		t:         t,
 		ssm:       &lazySSMClient{},
+		kms:       &lazyKMSClient{},
 		os:        os,
 	}
 	must(e.expandEnviron(*decrypt, *nofail))
@@ -93,7 +99,7 @@ type lazySSMClient struct {
 func (c *lazySSMClient) GetParameters(input *ssm.GetParametersInput) (*ssm.GetParametersOutput, error) {
 	// Initialize the SSM client (and AWS session) if it hasn't been already.
 	if c.ssm == nil {
-		sess, err := c.awsSession()
+		sess, err := awsSession()
 		if err != nil {
 			return nil, err
 		}
@@ -102,7 +108,27 @@ func (c *lazySSMClient) GetParameters(input *ssm.GetParametersInput) (*ssm.GetPa
 	return c.ssm.GetParameters(input)
 }
 
-func (c *lazySSMClient) awsSession() (*session.Session, error) {
+// lazyKMSClient wraps the AWS SDK KMS client such that the AWS session and
+// KMS client are not actually initialized until Decrypt is called for
+// the first time.
+type lazyKMSClient struct {
+	kms kmsClient
+}
+
+func (c *lazyKMSClient) Decrypt(input *kms.DecryptInput) (*kms.DecryptOutput, error) {
+	// Initialize the KMS client (and AWS session) if it hasn't been already.
+	if c.kms == nil {
+		sess, err := awsSession()
+		if err != nil {
+			return nil, err
+		}
+		c.kms = kms.New(sess)
+	}
+	return c.kms.Decrypt(input)
+}
+
+// awsSession creates and configures an AWS session with region detection
+func awsSession() (*session.Session, error) {
 	sess, err := session.NewSession(&aws.Config{
 		CredentialsChainVerboseErrors: aws.Bool(true),
 	})
@@ -132,6 +158,10 @@ type ssmClient interface {
 	GetParameters(*ssm.GetParametersInput) (*ssm.GetParametersOutput, error)
 }
 
+type kmsClient interface {
+	Decrypt(*kms.DecryptInput) (*kms.DecryptOutput, error)
+}
+
 type environ interface {
 	Environ() []string
 	Setenv(key, vale string)
@@ -155,6 +185,7 @@ type ssmVar struct {
 type expander struct {
 	t         *template.Template
 	ssm       ssmClient
+	kms       kmsClient
 	os        environ
 	batchSize int
 }
@@ -172,13 +203,32 @@ func (e *expander) parameter(k, v string) (*string, error) {
 	return nil, nil
 }
 
+type kmsVar struct {
+	envvar  string
+	encoded string
+}
+
 func (e *expander) expandEnviron(decrypt bool, nofail bool) error {
 	// Environment variables that point to some SSM parameters.
 	var ssmVars []ssmVar
-
+	
+	// Environment variables that are KMS encrypted.
+	var kmsVars []kmsVar
+	
 	uniqNames := make(map[string]bool)
 	for _, envvar := range e.os.Environ() {
 		k, v := splitVar(envvar)
+
+		// Check if this is a KMS encrypted value
+		if strings.HasPrefix(v, KMSPrefix) {
+			// Extract the base64 value by removing the prefix and any quotes
+			encodedPart := strings.TrimPrefix(v, KMSPrefix)
+			// Remove leading and trailing quotes if present
+			encodedPart = strings.Trim(encodedPart, "'\" ")
+			
+			kmsVars = append(kmsVars, kmsVar{k, encodedPart})
+			continue
+		}
 
 		parameter, err := e.parameter(k, v)
 		if err != nil {
@@ -197,34 +247,47 @@ func (e *expander) expandEnviron(decrypt bool, nofail bool) error {
 		}
 	}
 
-	if len(uniqNames) == 0 {
-		// Nothing to do, no SSM parameters.
-		return nil
-	}
-
-	names := make([]string, len(uniqNames))
-	i := 0
-	for k := range uniqNames {
-		names[i] = k
-		i++
-	}
-
-	for i := 0; i < len(names); i += e.batchSize {
-		j := i + e.batchSize
-		if j > len(names) {
-			j = len(names)
+	// Process SSM parameters
+	if len(uniqNames) > 0 {
+		names := make([]string, len(uniqNames))
+		i := 0
+		for k := range uniqNames {
+			names[i] = k
+			i++
 		}
 
-		values, err := e.getParameters(names[i:j], decrypt, nofail)
-		if err != nil {
-			return err
-		}
-
-		for _, v := range ssmVars {
-			val, ok := values[v.parameter]
-			if ok {
-				e.os.Setenv(v.envvar, val)
+		for i := 0; i < len(names); i += e.batchSize {
+			j := i + e.batchSize
+			if j > len(names) {
+				j = len(names)
 			}
+
+			values, err := e.getParameters(names[i:j], decrypt, nofail)
+			if err != nil {
+				return err
+			}
+
+			for _, v := range ssmVars {
+				val, ok := values[v.parameter]
+				if ok {
+					e.os.Setenv(v.envvar, val)
+				}
+			}
+		}
+	}
+
+	// Process KMS encrypted values
+	if len(kmsVars) > 0 {
+		for _, kv := range kmsVars {
+			decryptedValue, err := e.decryptKmsValue(kv.encoded, nofail)
+			if err != nil {
+				if nofail {
+					fmt.Fprintf(os.Stderr, "ssm-env: failed to decrypt KMS value: %v\n", err)
+					continue
+				}
+				return fmt.Errorf("failed to decrypt KMS value: %v", err)
+			}
+			e.os.Setenv(kv.envvar, decryptedValue)
 		}
 	}
 
@@ -285,6 +348,32 @@ func newInvalidParametersError(resp *ssm.GetParametersOutput) *invalidParameters
 
 func (e *invalidParametersError) Error() string {
 	return fmt.Sprintf("invalid parameters: %v", e.InvalidParameters)
+}
+
+// decryptKmsValue decrypts a base64-encoded KMS-encrypted value.
+func (e *expander) decryptKmsValue(encodedValue string, nofail bool) (string, error) {
+	// Add padding to base64 if needed
+	// Base64 encoding requires the string length to be a multiple of 4
+	padding := len(encodedValue) % 4
+	if padding != 0 {
+		encodedValue = encodedValue + strings.Repeat("=", 4-padding)
+	}
+	
+	decodedBytes, err := base64.StdEncoding.DecodeString(encodedValue)
+	if err != nil {
+		return "", fmt.Errorf("failed to decode base64 value: %v", err)
+	}
+	
+	input := &kms.DecryptInput{
+		CiphertextBlob: decodedBytes,
+	}
+	
+	result, err := e.kms.Decrypt(input)
+	if err != nil {
+		return "", err
+	}
+	
+	return string(result.Plaintext), nil
 }
 
 func splitVar(v string) (key, val string) {
